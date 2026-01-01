@@ -1,0 +1,1571 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestion Emploi du Temps v3 - Application Modulaire</title>
+
+
+    <!-- Chart.js pour les graphiques du dashboard 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@2.4.0/dist/purify.min.js"></script> -->
+    <!-- Styles -->
+    <link rel="stylesheet" href="src/css/main.css">
+    <style>
+        /* Style pour le bouton wizard */
+        #btnOpenExamWizard {
+            position: relative;
+            overflow: hidden;
+        }
+
+        #btnOpenExamWizard::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        #btnOpenExamWizard:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        /* Animation du summary */
+        details summary {
+            transition: all 0.3s ease;
+        }
+
+        details summary:hover {
+            background: #e9ecef !important;
+        }
+
+        details[open] summary {
+            margin-bottom: 20px;
+            border-bottom: 2px solid #667eea;
+        }
+    </style>
+
+
+</head>
+
+<body>
+
+
+    <!-- Spinner de chargement -->
+    <div id="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Zone de notifications -->
+    <div id="edt-notification-area"></div>
+
+    <!-- Conteneur principal -->
+    <div class="app-container">
+        <!-- En-tête -->
+        <div id="page-header">
+            <div>
+                <label for="inputAnneeUniversitaire">Année :</label>
+                <input type="text" id="inputAnneeUniversitaire" placeholder="2024/2025">
+            </div>
+            <div>
+                <label for="selectSession">Session :</label>
+                <select id="selectSession">
+                    <option value="Session d'automne">Session d'automne</option>
+                    <option value="Session de printemps">Session de printemps</option>
+                </select>
+            </div>
+            <div>
+                <label for="selectDepartement">Département :</label>
+                <select id="selectDepartement">
+                    <option>Département de physique</option>
+                    <option>Département de chimie</option>
+                    <option>Département de Biologie</option>
+                    <option>Département de mathématiques</option>
+                    <option>Département d'informatique</option>
+                    <option>Département de Géologie</option>
+                    <option>Département Modules Transversaux</option>
+                    <option>Administration</option>
+                </select>
+            </div>
+            <div id="header-actions">
+                <button id="saveBtn" class="save-btn">💾 Enregistrer</button>
+                <button id="btnManageCreneaux" class="btn" title="Gérer les créneaux">⏱️ Gérer Créneaux</button>
+                <button id="btnUndo" class="btn" title="Annuler la dernière modification" style="margin-left:8px;">↶
+                    Annuler</button>
+            </div>
+        </div>
+
+        <h1>🧠 Gestion Emploi du Temps v2.9 - Modulaire</h1>
+
+        <!-- Navigation par Onglets -->
+        <div class="tabs-container">
+            <button class="tab-btn active" data-tab="planning">📅 Planification</button>
+            <button class="tab-btn" data-tab="dashboard">📊 Dashboard</button>
+            <button class="tab-btn" data-tab="config">🔧 Configuration</button>
+            <button class="tab-btn" data-tab="volumes">📊 Volumes Horaires</button>
+            <button class="tab-btn" data-tab="stats">📈 Statistiques</button>
+            <button class="tab-btn" data-tab="gestion">👥 Gestion</button>
+            <button class="tab-btn" data-tab="salles">🏛️ Gestion Salles</button> <!-- NOUVEAU -->
+            <button class="tab-btn" data-tab="souhaits">💭 Souhaits Enseignants</button>
+            <button class="tab-btn" data-tab="rapports">📄 Rapports & Export</button>
+            <!-- <button class="tab-btn" data-tab="exam-timetable">📆 Emploi du temps</button> -->
+            <button class="tab-btn" data-tab="examens">📝 Examens</button>
+
+        </div>
+
+        <!-- Contenu des Onglets -->
+
+        <!-- ===== ONGLET PLANIFICATION ===== -->
+        <div id="tab-planning" class="tab-pane active">
+            <!-- <h2>📅 Planification Automatique</h2> -->
+
+            <!-- Options de planification -->
+            <div class="planning-options-panel">
+                <h3>⚙️ Options de Génération</h3>
+                <label><input type="checkbox" id="optionAssignTeachers" checked> Attribuer automatiquement les
+                    enseignants</label>
+                <label><input type="checkbox" id="optionAssignRooms" checked> Attribuer automatiquement les
+                    salles</label>
+                <label><input type="checkbox" id="optionRespectWishes" checked> Respecter les souhaits des
+                    enseignants</label>
+                <label><input type="checkbox" id="optionAvoidConflicts" checked> Éviter les conflits</label>
+            </div>
+
+            <!-- Actions de planification -->
+            <div class="planning-actions">
+                <button id="btnAutoGenerateAll" class="btn btn-primary">
+                    🚀 Générer Toutes les Séances
+                </button>
+                <!-- ===== OPTIONS AVANCÉES D'OPTIMISATION ===== -->
+                <div id="optimizationOptionsPanel"
+                    style="display: none; background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px; border: 2px solid #e9ecef;">
+                    <h4 style="margin: 0 0 15px 0; color: #667eea;">
+                        <span style="font-size: 1.3em;">⚙️</span> Options d'optimisation
+                    </h4>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <!-- Colonne gauche -->
+                        <div>
+                            <h5 style="margin: 0 0 10px 0; color: #495057; font-size: 1em;">Priorités</h5>
+
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: flex; align-items: center; cursor: pointer;">
+                                    <input type="checkbox" id="optRemoveGaps" checked
+                                        style="margin-right: 10px; width: 18px; height: 18px;">
+                                    <span>
+                                        <strong>Supprimer les trous</strong>
+                                        <br>
+                                        <small style="color: #6c757d;">Compacter les séances pour éviter les temps
+                                            morts</small>
+                                    </span>
+                                </label>
+                            </div>
+
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: flex; align-items: center; cursor: pointer;">
+                                    <input type="checkbox" id="optBalanceLoad" checked
+                                        style="margin-right: 10px; width: 18px; height: 18px;">
+                                    <span>
+                                        <strong>Équilibrer la charge</strong>
+                                        <br>
+                                        <small style="color: #6c757d;">Répartir équitablement les heures par
+                                            jour</small>
+                                    </span>
+                                </label>
+                            </div>
+
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: flex; align-items: center; cursor: pointer;">
+                                    <input type="checkbox" id="optGroupSubjects" checked
+                                        style="margin-right: 10px; width: 18px; height: 18px;">
+                                    <span>
+                                        <strong>Regrouper les matières</strong>
+                                        <br>
+                                        <small style="color: #6c757d;">Regrouper les séances d'une même matière</small>
+                                    </span>
+                                </label>
+
+                                <!-- Détails du regroupement -->
+                                <div id="groupSubjectsDetails"
+                                    style="margin-left: 28px; margin-top: 8px; padding: 12px; background: #fff; border-left: 3px solid #667eea; border-radius: 4px; display: block;">
+
+                                    <div style="margin-bottom: 10px;">
+                                        <label style="display: block; margin-bottom: 5px;">
+                                            <strong style="color: #667eea;">Stratégie de regroupement</strong>
+                                        </label>
+                                        <select id="optGroupStrategy"
+                                            style="width: 100%; padding: 6px; border: 2px solid #e0e0e0; border-radius: 4px;">
+                                            <option value="same-day" selected>Même jour (préféré)</option>
+                                            <option value="consecutive-days">Jours consécutifs</option>
+                                            <option value="spread">Répartir sur la semaine</option>
+                                        </select>
+                                    </div>
+
+                                    <div style="font-size: 0.85em; color: #495057;">
+                                        <div
+                                            style="margin-bottom: 5px; padding: 6px; background: #f8f9fa; border-radius: 4px;">
+                                            <strong>📅 Même jour :</strong> Toutes les séances d'une matière le même
+                                            jour
+                                        </div>
+                                        <div
+                                            style="margin-bottom: 5px; padding: 6px; background: #f8f9fa; border-radius: 4px;">
+                                            <strong>📆 Jours consécutifs :</strong> Séances sur 2-3 jours successifs
+                                        </div>
+                                        <div style="padding: 6px; background: #f8f9fa; border-radius: 4px;">
+                                            <strong>📊 Répartir :</strong> Séances distribuées sur toute la semaine
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: flex; align-items: center; cursor: pointer;">
+                                    <input type="checkbox" id="optPreferredSlots" checked
+                                        style="margin-right: 10px; width: 18px; height: 18px;">
+                                    <span>
+                                        <strong>Créneaux préférés</strong>
+                                        <br>
+                                        <small style="color: #6c757d;">Appliquer les préférences horaires par type de
+                                            séance</small>
+                                    </span>
+                                </label>
+
+                                <!-- Détails des préférences (affiché si l'option est cochée) -->
+                                <div id="preferredSlotsDetails"
+                                    style="margin-left: 28px; margin-top: 8px; padding: 12px; background: #fff; border-left: 3px solid #667eea; border-radius: 4px; display: block;">
+
+                                    <div style="margin-bottom: 12px;">
+                                        <label style="display: block; margin-bottom: 5px;">
+                                            <strong style="color: #667eea;">📚 Cours Magistraux (CM)</strong>
+                                        </label>
+                                        <select id="optCMSlot"
+                                            style="width: 100%; padding: 6px; border: 2px solid #e0e0e0; border-radius: 4px;">
+                                            <option value="morning" selected>Matin (8h-12h)</option>
+                                            <option value="afternoon">Après-midi (14h-18h)</option>
+                                            <option value="any">Peu importe</option>
+                                        </select>
+                                    </div>
+
+                                    <div style="margin-bottom: 12px;">
+                                        <label style="display: block; margin-bottom: 5px;">
+                                            <strong style="color: #667eea;">📝 Travaux Dirigés (TD)</strong>
+                                        </label>
+                                        <select id="optTDSlot"
+                                            style="width: 100%; padding: 6px; border: 2px solid #e0e0e0; border-radius: 4px;">
+                                            <option value="morning">Matin (8h-12h)</option>
+                                            <option value="afternoon" selected>Après-midi (14h-18h)</option>
+                                            <option value="any">Peu importe</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label style="display: block; margin-bottom: 5px;">
+                                            <strong style="color: #667eea;">🔬 Travaux Pratiques (TP)</strong>
+                                        </label>
+                                        <select id="optTPSlot"
+                                            style="width: 100%; padding: 6px; border: 2px solid #e0e0e0; border-radius: 4px;">
+                                            <option value="morning">Matin (8h-12h)</option>
+                                            <option value="afternoon" selected>Après-midi (14h-18h)</option>
+                                            <option value="any">Peu importe</option>
+                                        </select>
+                                    </div>
+
+                                    <div
+                                        style="margin-top: 10px; padding: 8px; background: #e7f3ff; border-radius: 4px; font-size: 0.8em; color: #0c5460;">
+                                        💡 Ces préférences seront utilisées lors de l'optimisation automatique
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Colonne droite -->
+                        <div>
+                            <h5 style="margin: 0 0 10px 0; color: #495057; font-size: 1em;">Paramètres avancés</h5>
+
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; margin-bottom: 5px;">
+                                    <strong>Tolérance de charge</strong>
+                                    <small style="color: #6c757d;">(± heures par jour)</small>
+                                </label>
+                                <input type="number" id="optLoadTolerance" value="1.5" min="0" max="4" step="0.5"
+                                    style="width: 100%; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px;">
+                                <small style="color: #6c757d;">Différence acceptable entre le jour le plus chargé et le
+                                    moins chargé</small>
+                            </div>
+
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; margin-bottom: 5px;">
+                                    <strong>Pause minimale</strong>
+                                    <small style="color: #6c757d;">(minutes)</small>
+                                </label>
+                                <input type="number" id="optMinBreak" value="15" min="0" max="60" step="5"
+                                    style="width: 100%; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px;">
+                                <small style="color: #6c757d;">Pause minimale entre deux séances</small>
+                            </div>
+
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; margin-bottom: 5px;">
+                                    <strong>Heure de fin maximum</strong>
+                                </label>
+                                <select id="optMaxEndTime"
+                                    style="width: 100%; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px;">
+                                    <option value="17">17:00</option>
+                                    <option value="18" selected>18:00</option>
+                                    <option value="19">19:00</option>
+                                    <option value="20">20:00</option>
+                                </select>
+                                <small style="color: #6c757d;">Ne pas planifier de séances après cette heure</small>
+                            </div>
+
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: flex; align-items: center; cursor: pointer;">
+                                    <input type="checkbox" id="optRespectExisting" checked
+                                        style="margin-right: 10px; width: 18px; height: 18px;">
+                                    <span>
+                                        <strong>Respecter les séances verrouillées</strong>
+                                        <br>
+                                        <small style="color: #6c757d;">Ne pas modifier les séances marquées comme
+                                            fixes</small>
+                                    </span>
+                                </label>
+                            </div>
+
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: flex; align-items: center; cursor: pointer;">
+                                    <input type="checkbox" id="optRespectConstraints" checked
+                                        style="margin-right: 10px; width: 18px; height: 18px;">
+                                    <span>
+                                        <strong>Respecter les contraintes enseignants</strong>
+                                        <br>
+                                        <small style="color: #6c757d;">
+                                            Analyser les remarques (matin/après-midi, jours indisponibles, etc.)
+                                        </small>
+                                    </span>
+                                </label>
+
+                                <!-- Détails des contraintes détectées -->
+                                <div id="constraintsDetectionSummary"
+                                    style="margin-left: 28px; margin-top: 8px; padding: 12px; background: #fff; border-left: 3px solid #667eea; border-radius: 4px; display: none;">
+                                    <div style="font-size: 0.85em; color: #495057;">
+                                        <div id="constraintsSummaryContent"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #e9ecef; text-align: right;">
+                        <button id="btnResetOptOptions" class="btn btn-secondary" style="margin-right: 10px;">
+                            Réinitialiser
+                        </button>
+                        <button id="btnCloseOptOptions" class="btn btn-secondary">
+                            Fermer
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Boutons -->
+                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <button id="btnShowOptOptions" class="btn btn-secondary">
+                        ⚙️ Options avancées
+                    </button>
+
+                    <button id="btnOptimizeSchedule" class="btn btn-primary"
+                        style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none;">
+                        ✨ Optimiser l'EDT
+                    </button>
+
+                    <button id="btnResolveConflicts" class="btn btn-warning">
+                        🔧 Résoudre les Conflits
+                    </button>
+                </div>
+            </div>
+
+            <!-- Filtres et recherche -->
+            <div class="search-panel">
+                <h3>🔍 Filtres et Recherche</h3>
+                <div class="search-inputs">
+                    <input type="text" id="searchMatiere" placeholder="Filtrer par matière...">
+                    <input type="text" id="searchEnseignant" placeholder="Filtrer par enseignant...">
+                    <input type="text" id="searchSalle" placeholder="Filtrer par salle...">
+                    <input type="text" id="searchSectionGroupe" placeholder="Filtrer par section/groupe...">
+                    <button id="btnClearFilters" class="btn btn-sm">🗑️ Effacer</button>
+                </div>
+            </div>
+
+            <!-- Sélecteur de vue -->
+            <div class="view-selector">
+                <label for="selectEDTView">Vue :</label>
+                <select id="selectEDTView">
+                    <option value="global">Vue Globale</option>
+                    <option value="enseignant_selectionne">Enseignant Sélectionné</option>
+                </select>
+            </div>
+
+            <!-- Tableau EDT -->
+            <div id="edtTableContainer">
+                <table id="edtTable"></table>
+            </div>
+        </div>
+        <!-- ===== ONGLET DASHBOARD ===== -->
+        <div id="tab-dashboard" class="tab-pane">
+            <div id="dashboardContainer"></div>
+        </div>
+        <!-- ===== ONGLET CONFIGURATION ===== -->
+
+        <div id="tab-config" class="tab-pane">
+            <h2>🔧 Configuration</h2>
+
+            <!-- Navigation sous-onglets -->
+            <div class="sub-tabs-container">
+                <button class="sub-tab-btn active" data-subtab="seances">🔧 Réglages</button>
+                <button class="sub-tab-btn" data-subtab="matieres">📚 Matières</button>
+                <button class="sub-tab-btn" data-subtab="enseignants">👨‍🏫 Enseignants</button>
+                <button class="sub-tab-btn" data-subtab="salles">🏛️ Salles</button>
+                <button class="sub-tab-btn" data-subtab="filieres">🎓 Filières</button>
+                <button class="sub-tab-btn" data-subtab="forfaits">💼 Forfaits</button>
+            </div>
+
+            <!-- ===== SOUS-ONGLET SÉANCES ===== -->
+            <div id="subtab-seances" class="sub-tab-pane active">
+                <div class="form-section">
+                    <h3>➕ Ajouter une Séance</h3>
+                    <form id="formAjouterSeance">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="selectJour">Jour *</label>
+                                <select id="selectJour" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label for="selectCreneau">Créneau *</label>
+                                <select id="selectCreneau" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label for="selectFiliere">Filière *</label>
+                                <select id="selectFiliere" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label for="selectMatiere">Matière *</label>
+                                <select id="selectMatiere" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label for="selectType">Type *</label>
+                                <select id="selectType" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label for="selectSection">Section *</label>
+                                <select id="selectSection" required></select>
+                            </div>
+                            <div class="form-group" id="groupeTDTPContainer" style="display: none;">
+                                <label for="selectGroupeTDTP">Groupe TD/TP *</label>
+                                <select id="selectGroupeTDTP"></select>
+                            </div>
+                            <div class="form-group">
+                                <label for="inputEnseignant1">Enseignant 1</label>
+                                <select id="inputEnseignant1"></select>
+                            </div>
+                            <div class="form-group" id="enseignant2Container" style="display: none;">
+                                <label for="inputEnseignant2" id="labelEnseignant2">Enseignant 2
+                                    (Co-responsable)</label>
+                                <select id="inputEnseignant2"></select>
+                            </div>
+                            <div class="form-group">
+                                <label for="selectSalle">Salle</label>
+                                <select id="selectSalle"></select>
+                            </div>
+                        </div>
+
+                        <div id="matiereInfoDisplay" style="margin-top: 15px;"></div>
+
+                        <!-- Aperçu des souhaits de l'enseignant sélectionné (si présent) -->
+                        <div id="teacherWishesPreview" style="margin-top: 12px;"></div>
+
+                        <div style="margin-top: 20px; display: flex; gap: 10px;">
+                            <button type="submit" id="btnAjouterSeance" class="btn btn-primary">➕ Ajouter la
+                                Séance</button>
+                            <button type="button" id="btnCancelSeanceEdit" class="btn btn-secondary"
+                                style="display: none;">❌ Annuler</button>
+                            <button type="button" id="btnResetSeanceForm" class="btn btn-secondary">🔄
+                                Réinitialiser</button>
+                        </div>
+                        <!-- Message d'aide après planification -->
+                        <div id="exam-form-helper"
+                            style="display:none; margin-top: 15px; padding: 12px; background: #e7f3ff; border-left: 4px solid #2196F3; border-radius: 6px;">
+                            <strong>💡 Astuce :</strong>
+                            Le formulaire reste pré-rempli pour vous permettre de créer facilement un autre examen sur
+                            le même créneau.
+                            Modifiez juste le titre et/ou les matières, puis cliquez à nouveau sur "Planification
+                            automatique".
+                        </div>
+                    </form>
+                </div>
+                <div class="form-section">
+                    <h3>⚙️ Réglages Généraux</h3>
+                    <div id="configGeneralSettingsContainer"></div>
+                </div>
+            </div>
+
+            <!-- ===== SOUS-ONGLET MATIÈRES ===== -->
+            <div id="subtab-matieres" class="sub-tab-pane">
+                <!-- Formulaire Ajouter Matière -->
+                <div class="form-section">
+                    <h3>➕ Ajouter une Matière</h3>
+                    <form id="formAjouterMatiere">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="inputNomMatiere">Nom de la matière *</label>
+                                <input type="text" id="inputNomMatiere" required placeholder="Ex: Mécanique Quantique">
+                            </div>
+                            <div class="form-group">
+                                <label for="selectFiliereMatiere">Filière *</label>
+                                <select id="selectFiliereMatiere" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label for="selectDepartementMatiere">Département</label>
+                                <select id="selectDepartementMatiere">
+                                    <option value="">-- Sélectionner --</option>
+                                    <!-- Rempli dynamiquement par populateFormSelects() -->
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="inputSectionsCours">Sections *</label>
+                                <input type="number" id="inputSectionsCours" min="0" value="1" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="inputTDGroups">Groupes TD *</label>
+                                <input type="number" id="inputTDGroups" min="0" value="0" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="inputTPGroups">Groupes TP *</label>
+                                <input type="number" id="inputTPGroups" min="0" value="0" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="inputVolumeCoursHTP">Volume hTP Cours *</label>
+                                <input type="number" id="inputVolumeCoursHTP" min="0" value="0" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="inputVolumeTDHTP">Volume hTP TD *</label>
+                                <input type="number" id="inputVolumeTDHTP" min="0" value="0" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="inputVolumeTPHTP">Volume hTP TP *</label>
+                                <input type="number" id="inputVolumeTPHTP" min="0" value="0" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="inputNbEnseignantsTP">Nb Enseignants TP *</label>
+                                <input type="number" id="inputNbEnseignantsTP" min="1" value="1" required>
+                            </div>
+                        </div>
+
+                        <div id="vhtPreview" style="margin-top: 15px;"></div>
+
+                        <div style="margin-top: 20px;">
+                            <button type="submit" class="btn btn-primary">➕ Ajouter la Matière</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Liste des Matières -->
+                <div class="form-section">
+                    <h3>📚 Matières Enregistrées</h3>
+                    <div id="configMatieresListContainer"></div>
+                </div>
+            </div>
+
+            <!-- ===== SOUS-ONGLET ENSEIGNANTS ===== -->
+            <div id="subtab-enseignants" class="sub-tab-pane">
+                <!-- Formulaire Ajouter Enseignant -->
+                <div class="form-section">
+                    <h3>➕ Ajouter un Enseignant</h3>
+                    <form id="formAjouterEnseignant">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="inputNomEnseignant">Nom de l'enseignant *</label>
+                                <input type="text" id="inputNomEnseignant" required placeholder="Ex: Dr. Ahmed Bennani">
+                            </div>
+                        </div>
+                        <div style="margin-top: 20px;">
+                            <button type="submit" class="btn btn-primary">➕ Ajouter l'Enseignant</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Liste des Enseignants -->
+                <div class="form-section">
+                    <h3>👨‍🏫 Enseignants Enregistrés</h3>
+                    <div id="configEnseignantsListContainer"></div>
+                </div>
+            </div>
+
+            <!-- ===== SOUS-ONGLET SALLES ===== -->
+            <div id="subtab-salles" class="sub-tab-pane">
+                <!-- Formulaire Ajouter Salle -->
+                <div class="form-section">
+                    <h3>➕ Ajouter une Salle</h3>
+                    <form id="formAjouterSalle">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="inputNomSalle">Nom de la salle *</label>
+                                <input type="text" id="inputNomSalle" required placeholder="Ex: S1">
+                            </div>
+                            <div class="form-group">
+                                <label for="selectTypeSalle">Type de salle *</label>
+                                <select id="selectTypeSalle" required></select>
+                            </div>
+                        </div>
+                        <div style="margin-top: 20px;">
+                            <button type="submit" class="btn btn-primary">➕ Ajouter la Salle</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Liste des Salles -->
+                <div class="form-section">
+                    <h3>🏛️ Salles Enregistrées</h3>
+                    <div id="configSallesListContainer"></div>
+                </div>
+                <div class="config-section">
+                    <h3 class="config-title">Salles Spécifiques par Filière</h3>
+                    <p class="config-description">
+                        Définissez un "pool" de salles prioritaires pour les "Cours" ou "TD".
+                        La planification auto les utilisera en priorité.
+                        (Utilisez <strong>CTRL+Clic</strong> ou <strong>CMD+Clic</strong> pour en sélectionner
+                        plusieurs).
+                    </p>
+
+                    <div id="configSallesParFiliereContainer" class="config-list">
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== SOUS-ONGLET FILIÈRES ===== -->
+            <div id="subtab-filieres" class="sub-tab-pane">
+                <!-- Formulaire Ajouter Filière -->
+                <div class="form-section">
+                    <h3>➕ Ajouter une Filière</h3>
+                    <form id="formAjouterFiliere">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="inputNomFiliere">Nom de la filière *</label>
+                                <input type="text" id="inputNomFiliere" required placeholder="Ex: S5 P">
+                            </div>
+                            <div class="form-group">
+                                <label for="selectSessionFiliere">Session *</label>
+                                <select id="selectSessionFiliere" required></select>
+                                <label for="selectDepartementFiliere">Département *</label>
+                                <select id="selectDepartementFiliere" required>
+                                    <option value="">-- Sélectionner --</option>
+                                    <!-- Les options seront remplies dynamiquement par populateFormSelects -->
+                                </select>
+                            </div>
+                        </div>
+                        <div style="margin-top: 20px;">
+                            <button type="submit" class="btn btn-primary">➕ Ajouter la Filière</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Liste des Filières -->
+                <div class="form-section">
+                    <h3>🎓 Filières Enregistrées</h3>
+                    <div id="configFilieresListContainer"></div>
+                </div>
+            </div>
+
+
+            <!-- ===== SOUS-ONGLET FORFAITS ===== -->
+            <div id="subtab-forfaits" class="sub-tab-pane">
+                <!-- Formulaire Ajouter Forfait -->
+                <div class="form-section">
+                    <h3>➕ Ajouter un Forfait</h3>
+                    <form id="formAjouterForfait">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="selectEnseignantForfait">Enseignant *</label>
+                                <select id="selectEnseignantForfait" required>
+                                    <option value="">-- Sélectionner un enseignant --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="selectNatureForfait">Nature du forfait *</label>
+                                <select id="selectNatureForfait" required>
+                                    <option value="">-- Sélectionner --</option>
+                                    <option value="Chef de département">Chef de département</option>
+                                    <option value="Collège">Collège</option>
+                                    <option value="Master">Master</option>
+                                    <option value="Coordonnateur de filière">Coordonnateur de filière</option>
+                                    <option value="Autres">Autres</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="inputVolumeHoraireForfait">Volume horaire (h) *</label>
+                                <input type="number" id="inputVolumeHoraireForfait" min="0" step="0.5" required
+                                    placeholder="Ex: 50">
+                            </div>
+                            <div class="form-group">
+                                <label for="inputDescriptionForfait">Description</label>
+                                <input type="text" id="inputDescriptionForfait" placeholder="Description optionnelle">
+                            </div>
+                        </div>
+                        <div style="margin-top: 20px; display: flex; gap: 10px;">
+                            <button type="submit" id="btnAjouterForfait" class="btn btn-primary">➕ Ajouter le
+                                Forfait</button>
+                            <button type="button" id="btnCancelForfaitEdit" class="btn btn-secondary"
+                                style="display: none;">❌ Annuler</button>
+                            <button type="button" id="btnResetForfaitForm" class="btn btn-secondary">🔄
+                                Réinitialiser</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Liste des Forfaits -->
+                <div class="form-section">
+                    <h3>💼 Forfaits Enregistrés</h3>
+                    <div id="forfaitsListContainer"></div>
+                </div>
+            </div>
+
+        </div>
+
+
+        <!-- ===== ONGLET VOLUMES ===== -->
+        <div id="tab-volumes" class="tab-pane">
+            <h2>📊 Volumes Horaires</h2>
+            <div id="volumesContainer"></div>
+        </div>
+        <!-- ===== ONGLET STATISTIQUES ===== -->
+        <div id="tab-stats" class="tab-pane">
+            <h2>📈 Statistiques</h2>
+            <div id="statsContainer"></div>
+        </div>
+
+        <!-- ===== ONGLET GESTION ===== -->
+        <div id="tab-gestion" class="tab-pane">
+            <h2>👥 Gestion des Ressources</h2>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
+                <!-- Liste Enseignants -->
+                <div class="form-section">
+                    <div id="teachersListContainer"></div>
+                </div>
+
+                <!-- Liste Matières -->
+                <div class="form-section">
+                    <div id="subjectsListContainer"></div>
+                </div>
+
+                <!-- Liste Salles -->
+                <div class="form-section">
+                    <div id="roomsListContainer"></div>
+                </div>
+            </div>
+        </div>
+        <!-- ===== ONGLET GESTION SALLES ===== -->
+        <div id="tab-salles" class="tab-pane">
+            <div id="roomManagementContainer"></div>
+        </div>
+
+        <!-- ===== ONGLET SOUHAITS ENSEIGNANTS ===== -->
+        <div id="tab-souhaits" class="tab-pane">
+            <h2>💭 Gestion des Souhaits des Enseignants</h2>
+
+            <!-- Import Souhaits -->
+            <div class="form-section">
+                <h3>📥 Importer les Souhaits depuis Excel</h3>
+                <p style="margin-bottom: 15px; color: #6c757d;">
+                    Dans l'onglet Rapports & Export, importez les souhaits de vos enseignants depuis un fichier Excel.
+                    Le fichier doit contenir les colonnes : Enseignant, Choix1, C1, TD1, TP1, Choix2, C2, TD2, TP2,
+                    Choix3, C3, TD3, TP3, Contraintes.
+                </p>
+
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;">
+
+                </div>
+
+                <!-- Instructions -->
+                <div
+                    style="background: #e7f3ff; border-left: 4px solid #2196F3; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
+                    <h4 style="margin-top: 0; color: #1976D2;">📖 Instructions</h4>
+                    <ol style="margin: 0; padding-left: 20px;">
+                        <li>Téléchargez le template Excel en cliquant sur "Télécharger Template Excel"</li>
+                        <li>Remplissez le fichier avec les souhaits de chaque enseignant</li>
+                        <li>Pour chaque choix, indiquez le nombre de séances souhaitées (0 = refus, vide = flexible)
+                        </li>
+                        <li>Cliquez sur "Importer Souhaits" et sélectionnez votre fichier rempli</li>
+                    </ol>
+                </div>
+
+                <!-- Format attendu -->
+                <div style="background: #fff9e6; border-left: 4px solid #FFC107; padding: 15px; border-radius: 4px;">
+                    <h4 style="margin-top: 0; color: #F57C00;">📋 Format du Fichier Excel</h4>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.85em;">
+                        <thead>
+                            <tr style="background: #f8f9fa;">
+                                <th style="border: 1px solid #dee2e6; padding: 8px;">Enseignant</th>
+                                <th style="border: 1px solid #dee2e6; padding: 8px;">Choix 1</th>
+                                <th style="border: 1px solid #dee2e6; padding: 8px;">C1</th>
+                                <th style="border: 1px solid #dee2e6; padding: 8px;">TD1</th>
+                                <th style="border: 1px solid #dee2e6; padding: 8px;">TP1</th>
+                                <th style="border: 1px solid #dee2e6; padding: 8px;">...</th>
+                                <th style="border: 1px solid #dee2e6; padding: 8px;">Contraintes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="border: 1px solid #dee2e6; padding: 8px;">Dr. Ahmed Bennani</td>
+                                <td style="border: 1px solid #dee2e6; padding: 8px;">Mécanique Quantique</td>
+                                <td style="border: 1px solid #dee2e6; padding: 8px;">1</td>
+                                <td style="border: 1px solid #dee2e6; padding: 8px;">2</td>
+                                <td style="border: 1px solid #dee2e6; padding: 8px;">0</td>
+                                <td style="border: 1px solid #dee2e6; padding: 8px;">...</td>
+                                <td style="border: 1px solid #dee2e6; padding: 8px;">Disponible le matin</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Liste des Souhaits Actuels -->
+            <div class="form-section">
+                <h3>👥 Souhaits Actuels des Enseignants</h3>
+                <div id="wishesListContainer">
+                    <p class="empty-message">Chargement des souhaits...</p>
+                </div>
+            </div>
+
+            <!-- Formulaire de Saisie Manuel -->
+            <div class="form-section">
+                <h3>✍️ Saisir/Modifier les Souhaits Manuellement</h3>
+                <form id="formSouhaitsEnseignant">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="selectEnseignantSouhaits">Enseignant *</label>
+                            <select id="selectEnseignantSouhaits" required>
+                                <option value="">-- Sélectionner un enseignant --</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Choix 1 -->
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 20px;">
+                        <h4 style="margin-top: 0;">1er Choix</h4>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="inputChoix1">Matière</label>
+                                <select id="inputChoix1">
+                                    <option value="">-- Sélectionner --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="inputC1">Nb Cours</label>
+                                <input type="number" id="inputC1" min="0" placeholder="0 = refus">
+                            </div>
+                            <div class="form-group">
+                                <label for="inputTD1">Nb TD</label>
+                                <input type="number" id="inputTD1" min="0" placeholder="0 = refus">
+                            </div>
+                            <div class="form-group">
+                                <label for="inputTP1">Nb TP</label>
+                                <input type="number" id="inputTP1" min="0" placeholder="0 = refus">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Choix 2 -->
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 15px;">
+                        <h4 style="margin-top: 0;">2ème Choix</h4>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="inputChoix2">Matière</label>
+                                <select id="inputChoix2">
+                                    <option value="">-- Sélectionner --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="inputC2">Nb Cours</label>
+                                <input type="number" id="inputC2" min="0" placeholder="0 = refus">
+                            </div>
+                            <div class="form-group">
+                                <label for="inputTD2">Nb TD</label>
+                                <input type="number" id="inputTD2" min="0" placeholder="0 = refus">
+                            </div>
+                            <div class="form-group">
+                                <label for="inputTP2">Nb TP</label>
+                                <input type="number" id="inputTP2" min="0" placeholder="0 = refus">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Choix 3 -->
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 15px;">
+                        <h4 style="margin-top: 0;">3ème Choix</h4>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="inputChoix3">Matière</label>
+                                <select id="inputChoix3">
+                                    <option value="">-- Sélectionner --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="inputC3">Nb Cours</label>
+                                <input type="number" id="inputC3" min="0" placeholder="0 = refus">
+                            </div>
+                            <div class="form-group">
+                                <label for="inputTD3">Nb TD</label>
+                                <input type="number" id="inputTD3" min="0" placeholder="0 = refus">
+                            </div>
+                            <div class="form-group">
+                                <label for="inputTP3">Nb TP</label>
+                                <input type="number" id="inputTP3" min="0" placeholder="0 = refus">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Contraintes -->
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label for="inputContraintes">Contraintes et Remarques</label>
+                        <textarea id="inputContraintes" rows="3"
+                            placeholder="Ex: Disponible uniquement le matin, Préfère les TD aux TP..."></textarea>
+                    </div>
+
+                    <div style="margin-top: 20px;">
+                        <button type="submit" class="btn btn-primary">💾 Enregistrer les Souhaits</button>
+                        <button type="button" id="btnResetWishesForm" class="btn btn-secondary">🔄
+                            Réinitialiser</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <!-- ===== ONGLET RAPPORTS ===== -->
+        <div id="tab-rapports" class="tab-pane">
+            <h2>📄 Rapports & Export</h2>
+
+            <!-- Export EDT -->
+            <div class="export-section">
+                <h3>📥 Export de l'Emploi du Temps</h3>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button id="btnExportPDF" class="btn btn-primary">📄 Exporter en PDF</button>
+                    <button id="btnExportExcel" class="btn btn-success">📗 Exporter en Excel</button>
+                    <button id="btnExportTeachersSchedules" class="btn btn-info">👨‍🏫 EDT Enseignants (PDF)</button>
+                </div>
+            </div>
+
+            <!-- Export Volumes -->
+            <div class="export-section">
+                <h3>📊 Export des Volumes Horaires</h3>
+                <button id="btnExportVolumes" class="btn btn-info">📊 Exporter Volumes (Excel)</button>
+            </div>
+
+            <!-- Import -->
+            <div class="import-section">
+                <h3>📥 Imports</h3>
+
+                <div class="import-group">
+                    <h4>Souhaits des Enseignants</h4>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button id="btnImportWishes" class="btn btn-secondary">📥 Importer Souhaits (Excel)</button>
+                        <button id="btnDownloadWishesTemplate" class="btn btn-sm">📋 Télécharger Template</button>
+                    </div>
+                    <input type="file" id="fileImportWishes" accept=".xlsx,.xls" style="display: none;">
+                </div>
+
+                <div class="import-group">
+                    <h4>Matières</h4>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button id="btnImportSubjects" class="btn btn-secondary">📥 Importer Matières (Excel)</button>
+                        <button id="btnDownloadSubjectsTemplate" class="btn btn-sm">📋 Télécharger Template</button>
+                    </div>
+                    <input type="file" id="fileImportSubjects" accept=".xlsx,.xls" style="display: none;">
+                </div>
+                <!-- Import Filières -->
+                <div class="import-group">
+                    <h4>Filières</h4>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button id="btnImportFilieres" class="btn btn-secondary">📥 Importer Filières (Excel)</button>
+                        <button id="btnDownloadFilieresTemplate" class="btn btn-sm">📋 Télécharger Template</button>
+                    </div>
+                    <input type="file" id="inputImportFilieres" accept=".xlsx,.xls" style="display: none;">
+                    <p class="help-text" style="margin-top:8px; color:#6c757d;">
+                        Fichier Excel : colonnes [Filière, Session (Automne|Printemps), Département]. Une en-tête est
+                        tolérée.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Gestion Projet -->
+            <div class="export-section">
+                <h3>💾 Gestion du Projet</h3>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <!-- Export/Import Projet buttons removed to avoid conflicts with custom backup UI -->
+                </div>
+                <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button id="btnResetEDT" class="btn btn-warning">🔄 Réinitialiser EDT Session</button>
+                    <button id="btnResetProject" class="btn btn-danger">⚠️ Réinitialiser Projet Complet</button>
+                </div>
+            </div>
+
+            <!-- Journal des opérations -->
+            <div id="log-container" class="form-section">
+                <h3>📋 Journal des Opérations
+                    <button id="btnClearLog" class="btn btn-sm btn-danger" style="float: right;">🗑️ Vider</button>
+                </h3>
+                <div id="messages"></div>
+            </div>
+        </div>
+
+
+        <!-- ===== ONGLET EXAMENS ===== -->
+        <div id="tab-examens" class="tab-pane">
+            <h2>📝 Gestion des Examens</h2>
+
+            <!-- Sous-onglets pour l'onglet Examens -->
+            <div class="sub-tabs-container" style="margin-bottom:12px;">
+                <button class="sub-tab-btn active" data-subtab="subtab-exam-gestion">👩‍💼 Gestion des examens</button>
+                <button class="sub-tab-btn" data-subtab="subtab-exam-timetable">📆 Emploi du temps</button>
+                <button class="sub-tab-btn" data-subtab="subtab-exam-rooms">🏛️ Salles d'examen</button>
+            </div>
+
+            <!-- Sous-onglet : gestion des examens (par défaut visible) -->
+            <div id="subtab-exam-gestion" class="sub-tab-pane active">
+                <div class="form-section" style="margin-bottom: 30px;">
+                    <button id="btnOpenExamWizard" class="btn btn-lg btn-primary"
+                        style="width: 100%; padding: 25px; font-size: 1.3em; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4); transition: all 0.3s ease;"
+                        onmouseover="this.style. transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(102, 126, 234, 0.6)';"
+                        onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(102, 126, 234, 0.4)';">
+                        ✨ Créer un nouvel examen (Assistant intuitif)
+                    </button>
+                    <p style="text-align: center; color: #6c757d; margin-top: 10px; font-size: 0.95em;">
+                        💡 Utilise l'assistant progressif pour une création simplifiée
+                    </p>
+                </div>
+
+                <!-- Séparateur visuel -->
+                <div style="border-top: 2px solid #e9ecef; margin: 30px 0; position: relative;">
+                    <span
+                        style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: white; padding: 0 15px; color: #6c757d; font-size: 0.9em;">
+                        OU
+                    </span>
+                </div>
+                <div class="form-section" id="legacy-exam-form">
+                    <details>
+                        <summary
+                            style="cursor: pointer; padding: 15px; background: #f8f9fa; border-radius: 8px; font-weight: 600; font-size: 1.1em; margin-bottom: 20px;">
+                            ✍️ Formulaire manuel (édition avancée)
+                        </summary>
+                        <form id="formAjouterExamen">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="inputExamTitle">Titre *</label>
+                                    <input type="text" id="inputExamTitle" required
+                                        placeholder="Ex: Session Finale - Mécanique">
+                                </div>
+                                <div class="form-group">
+                                    <label for="inputExamDate">Date *</label>
+                                    <input type="date" id="inputExamDate" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="inputExamStart">Heure début *</label>
+                                    <input type="time" id="inputExamStart" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="inputExamEnd">Heure fin *</label>
+                                    <input type="time" id="inputExamEnd" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="inputExamSession">Session (Automne/Printemps)</label>
+                                    <select id="inputExamSession">
+                                        <option value="">-- Sélectionner --</option>
+                                        <option>Automne</option>
+                                        <option>Printemps</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="inputExamFiliere">Filière</label>
+                                    <select id="inputExamFiliere">
+                                        <option value="">-- Sélectionner --</option>
+                                        <!-- Options remplies dynamiquement depuis StateManager.state.filieres -->
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="inputExamDept">Département</label>
+                                    <select id="inputExamDept"></select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="inputExamSubjects">Matières (sélectionner une ou plusieurs)</label>
+                                    <select id="inputExamSubjects" multiple size="6" style="min-width:220px;">
+                                        <!-- Options peuplées dynamiquement selon la filière sélectionnée -->
+                                    </select>
+                                    <small class="help-text">Sélectionnez les matières associées à la filière
+                                        choisie.</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="inputExamRooms">Salles (séparées par virgule)</label>
+                                    <input type="text" id="inputExamRooms" placeholder="S1, S2">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="inputExamStudentsCount">Nombre total d'étudiants</label>
+                                    <input type="number" id="inputExamStudentsCount" min="0" placeholder="Ex: 120">
+                                    <small class="help-text">Indiquer le nombre total d'étudiants concernés par
+                                        l'examen.</small>
+                                </div>
+                                <!-- NOUVEAU : Indicateur de capacité -->
+                                <div class="form-group" style="grid-column: 1 / -1;">
+                                    <div id="exam-capacity-indicator"
+                                        style="background: linear-gradient(135deg, #e7f3ff 0%, #f0e7ff 100%); border-left: 5px solid #667eea; padding: 15px; border-radius: 10px; display: none;">
+                                        <div style="display: flex; justify-content: space-around; text-align: center;">
+                                            <div>
+                                                <div
+                                                    style="font-size: 0.85em; color: #6c757d; text-transform: uppercase; margin-bottom: 5px;">
+                                                    🏢 Capacité totale</div>
+                                                <div id="exam-total-capacity"
+                                                    style="font-size: 1.8em; font-weight: bold; color: #667eea;">—</div>
+                                            </div>
+                                            <div>
+                                                <div
+                                                    style="font-size: 0. 85em; color: #6c757d; text-transform: uppercase; margin-bottom: 5px;">
+                                                    ✅ Capacité utilisée</div>
+                                                <div id="exam-used-capacity"
+                                                    style="font-size: 1.8em; font-weight: bold; color: #28a745;">0</div>
+                                            </div>
+                                            <div>
+                                                <div
+                                                    style="font-size: 0.85em; color: #6c757d; text-transform: uppercase; margin-bottom: 5px;">
+                                                    📊 Capacité restante</div>
+                                                <div id="exam-remaining-capacity"
+                                                    style="font-size: 1.8em; font-weight: bold; color: #17a2b8;">—</div>
+                                                <div id="exam-remaining-percentage"
+                                                    style="font-size: 0.75em; color: #6c757d; margin-top: 3px;">—</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="form-group" style="grid-column: 1 / -1;">
+                                    <label for="inputExamNotes">Remarques</label>
+                                    <textarea id="inputExamNotes" rows="2"></textarea>
+                                </div>
+                            </div>
+                            <div style="margin-top: 12px; display:flex; gap:10px;">
+                                <button type="submit" class="btn btn-primary">💾 Enregistrer l'Examen</button>
+                                + <button type="button" id="btnAutoScheduleCurrentExam" class="btn btn-warning">⚙️
+                                    Planification
+                                    automatique</button>
+                                + <button type="button" id="btnResetExamForm" class="btn btn-secondary">🔄
+                                    Réinitialiser</button>
+                            </div>
+                        </form>
+                    </details>
+                </div>
+
+                <div class="form-section">
+                    <h3 style="display:flex; align-items:center; gap:12px;">
+                        📚 Examens Planifiés
+                        <!-- Bouton pour basculer vers le sous-onglet Emploi du temps 
+                        <button id="btnShowExamTimetable" class="btn btn-sm btn-secondary"
+                            title="Afficher l'emploi du temps" style="margin-left:8px; font-size:0.95em;">
+                            📆 Emploi du temps
+                        </button> -->
+                    </h3>
+                    <!-- toolbar pour les actions globales liées aux examens (insérer juste avant #examsListContainer) -->
+                    <div class="exams-toolbar" style="display:flex; gap:8px; align-items:center; margin:8px 0 12px;">
+                        <button id="btnManageExamRooms" class="btn btn-secondary" type="button"
+                            title="Gérer la répartition des étudiants par salle">
+                            ⚙️ Gérer répartition étudiants
+                        </button>
+                    </div>
+                    <div id="examsListContainer">Chargement des examens...</div>
+                </div>
+            </div>
+
+            <!-- Sous-onglet : Emploi du temps -->
+            <div id="subtab-exam-timetable" class="sub-tab-pane" style="display:none;">
+
+                <div class="form-section">
+                    <h3 style="display:flex; align-items:center; gap:12px;">
+                        📆 Emploi du temps — Examens planifiés
+                        <!-- Bouton d'export PDF pour l'emploi du temps -->
+                        <button id="btnExportExamTimetablePDF" class="btn btn-sm btn-primary"
+                            title="Exporter l'emploi du temps en PDF" style="margin-left:8px; font-size:0.95em;">
+                            📄 Exporter l'examen PDF
+                        </button>
+                    </h3>
+                    <p style="color:#6c757d; margin-bottom:8px;">
+                        Vue récapitulative des examens par jour et créneaux. Cliquez sur un examen pour afficher les
+                        détails.
+                    </p>
+                    <div id="examTimetableContainer" style="margin-top:12px;">Chargement de l'emploi du temps...</div>
+                </div>
+            </div>
+
+
+            <!-- Sous-onglet : Configuration des salles d'examen -->
+            <div id="subtab-exam-rooms" class="sub-tab-pane" style="display:none;">
+                <div class="form-section">
+                    <h3>🏛️ Configuration des Salles d'Examen</h3>
+                    <p style="color:#6c757d; margin-bottom:8px;">
+                        Définissez la capacité et le nombre de surveillants par salle pour l'organisation des examens.
+                        Sélectionnez une salle existante et ajoutez sa configuration.
+                    </p>
+
+                    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;">
+                        <div style="display:flex; flex-direction:column;">
+                            <label for="selectExamRoomForConfig">Salle</label>
+                            <select id="selectExamRoomForConfig">
+                                <option value="">-- Sélectionner une salle --</option>
+                            </select>
+                        </div>
+
+                        <div style="display:flex; flex-direction:column;">
+                            <label for="inputExamRoomCapacity">Capacité (nb étudiants)</label>
+                            <input type="number" id="inputExamRoomCapacity" min="0" placeholder="Ex: 120">
+                        </div>
+
+                        <div style="display:flex; flex-direction:column;">
+                            <label for="inputExamRoomSupervisors">Nb surveillants</label>
+                            <input type="number" id="inputExamRoomSupervisors" min="0" placeholder="Ex: 2">
+                        </div>
+
+                        <div>
+                            <button id="btnAddExamRoomConfig" class="btn btn-secondary" type="button"
+                                style="margin-top:22px;">
+                                ➕ Ajouter / Mettre à jour
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="examRoomConfigsContainer" style="margin-top:8px;">
+                        <!-- List of configured exam rooms will be rendered here -->
+                    </div>
+
+                    <div style="margin-top:12px;">
+                        <button id="btnSaveExamRoomConfigs" class="btn btn-primary">💾 Enregistrer Configurations
+                            Salles</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Footer -->
+        <footer id="page-footer">
+            Pr. Ibrahim Mrani - UCD - Version 2.9 Modulaire - Développé par @mranii-cmd - 2025-11-04
+        </footer>
+    </div>
+
+    <!-- Modale de dialogue -->
+    <div id="dialogModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4"
+        role="dialog" aria-modal="true" aria-labelledby="dialogTitle"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md"
+            style="background: white; border-radius: 12px; padding: 20px; max-width: 500px; width: 90%; display:flex; flex-direction:column; max-height: calc(100vh - 80px); overflow: hidden;">
+
+            <div class="flex justify-between items-center border-b pb-3 mb-4"
+                style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e9ecef; padding-bottom: 12px; margin-bottom: 12px; flex: 0 0 auto;">
+                <h3 id="dialogTitle" class="text-xl font-bold" style="font-size: 1.3em; font-weight: bold;">Notification
+                </h3>
+                <button id="closeDialogBtn" class="text-gray-500 hover:text-gray-800 text-2xl leading-none"
+                    aria-label="Fermer la boîte de dialogue"
+                    style="background: none; border: none; font-size: 1.5em; cursor: pointer;">&times;</button>
+            </div>
+            <div id="dialogBody" class="text-gray-700"
+                style="line-height: 1.6; overflow:auto; flex:1 1 auto; margin-bottom:12px; padding-right:6px;"></div>
+            <div class="flex justify-end gap-4"
+                style="display: flex; justify-content: flex-end; gap: 10px; flex:0 0 auto; margin-top:6px;">
+                <button id="dialogCancelBtn" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+                    aria-label="Annuler"
+                    style="padding: 10px 20px; background: #e9ecef; border: none; border-radius: 6px; cursor: pointer;">Annuler</button>
+                <button id="dialogConfirmBtn" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                    aria-label="Confirmer"
+                    style="padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer;">Confirmer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Focus-trap & restore script for the modal (lightweight, non-intrusive) -->
+    <script>
+        (function () {
+            const modal = document.getElementById('dialogModal');
+            if (!modal) return;
+            let lastFocused = null;
+            // utility: first focusable inside modal
+            function getFirstFocusable(root) {
+                if (!root) return null;
+                const selectors = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+                return root.querySelector(selectors);
+            }
+            // observe style attribute changes to detect show/hide
+            const obs = new MutationObserver(() => {
+                try {
+                    const isVisible = window.getComputedStyle(modal).display !== 'none' && modal.offsetParent !== null;
+                    if (isVisible) {
+                        // store last focused
+                        lastFocused = document.activeElement;
+                        // focus first focusable (close button preferred)
+                        const closeBtn = document.getElementById('closeDialogBtn');
+                        const firstFocus = closeBtn || getFirstFocusable(modal);
+                        if (firstFocus) firstFocus.focus();
+                        // simple trap: prevent tabbing out by capturing focusin and redirecting when needed
+                        document.addEventListener('focusin', focusInHandler);
+                    } else {
+                        document.removeEventListener('focusin', focusInHandler);
+                        // restore previous focus
+                        if (lastFocused && typeof lastFocused.focus === 'function') {
+                            lastFocused.focus();
+                            lastFocused = null;
+                        }
+                    }
+                } catch (e) { /* noop */ }
+            });
+            function focusInHandler(e) {
+                if (!modal.contains(e.target)) {
+                    // redirect focus back to modal
+                    const first = getFirstFocusable(modal) || modal;
+                    if (first) first.focus();
+                }
+            }
+            obs.observe(modal, { attributes: true, attributeFilter: ['style', 'class'] });
+
+            // ensure close button restores focus on click
+            const closeBtn = document.getElementById('closeDialogBtn');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', () => {
+                    try {
+                        modal.style.display = 'none';
+                    } catch (e) { /* noop */ }
+                });
+            }
+        })();
+    </script>
+
+    <!-- Shortcut script for Configuration → Séances -->
+    <script>
+        (function () {
+            /**
+             * Open Configuration -> Séances
+             * Strategy:
+             * 1) Try to click the main tab button with data-tab="config"
+             * 2) Then click the subtab button data-subtab="seances"
+             * 3) If tabs are managed by JS and click doesn't work immediately, try small delays
+             */
+            function openSeancesConfigShortcut() {
+                try {
+                    const configTabBtn = document.querySelector('.tab-btn[data-tab="config"]');
+                    if (configTabBtn) {
+                        // Click main config tab
+                        configTabBtn.click();
+
+                        // After a short delay allow sub-tabs to be available/activated
+                        setTimeout(() => {
+                            const subtabBtn = document.querySelector('.sub-tab-btn[data-subtab="seances"]');
+                            if (subtabBtn) {
+                                subtabBtn.click();
+                                // focus for accessibility
+                                subtabBtn.focus();
+                            } else {
+                                // If subtab button not present yet, attempt again shortly
+                                setTimeout(() => {
+                                    const subtabBtn2 = document.querySelector('.sub-tab-btn[data-subtab="seances"]');
+                                    if (subtabBtn2) {
+                                        subtabBtn2.click();
+                                        subtabBtn2.focus();
+                                    } else {
+                                        console.info('Shortcut Séances: sous-onglet non trouvé.');
+                                    }
+                                }, 150);
+                            }
+                        }, 80);
+                        return;
+                    }
+
+                    // fallback: try to open config via element with id or data-open
+                    const configToggle = document.querySelector('#btn-config, [data-open="configuration"]');
+                    if (configToggle) {
+                        configToggle.click();
+                        setTimeout(() => {
+                            const subtab = document.querySelector('.sub-tab-btn[data-subtab="seances"]');
+                            if (subtab) subtab.click();
+                        }, 120);
+                        return;
+                    }
+
+                    // final fallback: try to show a helpful message in console/notification area
+                    console.info('Raccourci Séances : contrôle d\'onglet non trouvé automatiquement.');
+                } catch (err) {
+                    console.error('openSeancesConfigShortcut error', err);
+                }
+            }
+
+            // Attach listener after DOM is ready
+            document.addEventListener('DOMContentLoaded', () => {
+                const btn = document.getElementById('btnShortcutSeances');
+                if (btn) {
+                    btn.addEventListener('click', openSeancesConfigShortcut);
+                }
+            });
+
+            // Also attach in case DOMContentLoaded already fired
+            const btnImmediate = document.getElementById('btnShortcutSeances');
+            if (btnImmediate) btnImmediate.addEventListener('click', openSeancesConfigShortcut);
+            function attachShortcutOnce() {
+                const btn = document.getElementById('btnShortcutSeances');
+                if (!btn) return;
+                if (btn.dataset.shortcutAttached) return;
+                btn.addEventListener('click', openSeancesConfigShortcut);
+                btn.dataset.shortcutAttached = '1';
+            }
+
+            // Attacher après DOM ready (ou immédiatement si possible) — safe grâce au guard
+            document.addEventListener('DOMContentLoaded', attachShortcutOnce);
+            attachShortcutOnce(); // si DOMContentLoaded déjà passé, l'appel immédiat attache ; sinon no-op
+        })();
+        // Script pour gérer l'affichage des détails des préférences
+        // Script pour gérer l'affichage des détails des préférences
+        (function () {
+            // Attendre que le DOM soit complètement chargé
+            function initOptionsToggles() {
+                // Toggle pour "Créneaux préférés"
+                const checkboxPreferred = document.getElementById('optPreferredSlots');
+                const detailsPreferred = document.getElementById('preferredSlotsDetails');
+
+                if (checkboxPreferred && detailsPreferred) {
+                    const togglePreferred = function () {
+                        detailsPreferred.style.display = checkboxPreferred.checked ? 'block' : 'none';
+                    };
+                    togglePreferred();
+                    checkboxPreferred.addEventListener('change', togglePreferred);
+                    console.log('Preferred slots toggle initialized');
+                }
+
+                // Toggle pour "Regrouper les matières"
+                const checkboxGroup = document.getElementById('optGroupSubjects');
+                const detailsGroup = document.getElementById('groupSubjectsDetails');
+
+                if (checkboxGroup && detailsGroup) {
+                    const toggleGroup = function () {
+                        detailsGroup.style.display = checkboxGroup.checked ? 'block' : 'none';
+                    };
+                    toggleGroup();
+                    checkboxGroup.addEventListener('change', toggleGroup);
+                    console.log('Group subjects toggle initialized');
+                }
+            }
+
+            // Essayer d'initialiser immédiatement
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initOptionsToggles);
+            } else {
+                initOptionsToggles();
+            }
+        })();
+
+    </script>
+    <script>  window.EDT_API_BASE = 'http://localhost:4000/api';
+        window.EDT_DEV_ALLOW_FAKE_LOGIN = false; </script>
+    <!-- Application principale (ES6 Module) -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@2.4.0/dist/purify.min.js"></script>
+    <script type="module" src="src/js/panexam.js"></script>
+    <script type="module" src="src/js/exportExamPdf.js"></script>
+
+    <!--<script src="src/js/edt-compat.js"></script> -->
+
+    <script src="./js/backup-service.js"></script>
+    <!--- <script src="./js/backup-ui.js"></script>-->
+    <script src="./js/backup-importer.js"></script>
+
+    <!-- Bibliothèques externes -->
+    <script src="lib/jszip.min.js" defer></script>
+    <script src="lib/xlsx.full.min.js" defer></script>
+    <script src="lib/jspdf.umd.min.js" defer></script>
+    <script src="lib/jspdf.plugin.autotable.min.js" defer></script>
+    <script src="lib/html2canvas.min.js" defer></script>
+    <script src="lib/chart.umd.min.js" defer></script>
+    <script src="lib/purify.min.js" defer></script>
+
+    <script>
+        /* Ensure a tiny, early updater for the Undo/Redo UI to avoid timing races.
+           Defines window.__updateUndoUI() and subscribes to the 'undo:stackChanged' event.
+           Safe / idempotent: if undo UI not present yet, it will be a no-op. */
+        (function () {
+            function updateButtons() {
+                try {
+                    var undoBtn = document.getElementById('btnUndo');
+                    var redoBtn = document.getElementById('btnRedo');
+                    var canU = window.StateManager && typeof window.StateManager.canUndo === 'function' ? !!window.StateManager.canUndo() : false;
+                    var canR = window.StateManager && typeof window.StateManager.canRedo === 'function' ? !!window.StateManager.canRedo() : false;
+                    if (undoBtn) undoBtn.disabled = !canU;
+                    if (redoBtn) redoBtn.disabled = !canR;
+                } catch (e) { /* noop */ }
+            }
+
+            // Expose a global helper used by StateManager to force UI update (covers races)
+            try { window.__updateUndoUI = updateButtons; } catch (e) { /* noop */ }
+
+            // Listen to the global event (if dispatched)
+            try { window.addEventListener('undo:stackChanged', updateButtons); } catch (e) { /* noop */ }
+
+            // Also update once when DOM is ready (covers case where actions happened before UI built)
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function () { setTimeout(updateButtons, 10); });
+            } else {
+                setTimeout(updateButtons, 10);
+            }
+        })();
+    </script>
+
+    <script type="module" src="src/js/main.js" defer></script>
+
+    <script src="src/js/ui/undo-ui.js" defer></script>
+    <!-- Module to manage time slots (creneaux) -->
+    <script type="module" src="src/js/creneaux-manager.js" defer></script>
+    <script>
+        (function () {
+            function updateUndoBtn() {
+                try {
+                    var btn = document.getElementById('btnUndo');
+                    if (!btn) return;
+                    var can = (window.StateManager && typeof window.StateManager.canUndo === 'function') ? window.StateManager.canUndo() : false;
+                    btn.disabled = !can;
+                } catch (e) { }
+            }
+            document.addEventListener('DOMContentLoaded', function () {
+                var btn = document.getElementById('btnUndo');
+                if (!btn) return;
+                btn.addEventListener('click', function (e) {
+                    e && e.preventDefault && e.preventDefault();
+                    try {
+                        if (window.StateManager && typeof window.StateManager.undo === 'function') {
+                            var ok = window.StateManager.undo();
+                            if (!ok) alert('Aucune action à annuler.');
+                        } else {
+                            alert('Fonction undo non disponible.');
+                        }
+                    } catch (err) { console.error('Undo failed', err); alert('Undo failed: ' + (err && err.message)); }
+                    setTimeout(updateUndoBtn, 50);
+                });
+                // update initially and on some events
+                updateUndoBtn();
+                // attempt to update when state changes — if StateManager.notify exists we can subscribe instead
+                try {
+                    if (window.StateManager && typeof window.StateManager.subscribe === 'function') {
+                        window.StateManager.subscribe('stateChanged', updateUndoBtn);
+                    }
+                } catch (e) { }
+                // also periodically enable when stack changes
+                setInterval(updateUndoBtn, 1500);
+            });
+        })();
+    </script>
+</body>
+
+</html>
