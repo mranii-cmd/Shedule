@@ -15,7 +15,7 @@ jobs:
       - name: Décompresser le fichier ZIP
         run: |
           if [ -f "LectioShed7.8 5.zip" ]; then
-            unzip "LectioShed7.8 5.zip"
+            unzip -q "LectioShed7.8 5.zip"
             rm "LectioShed7.8 5.zip"
           else
             echo "Le fichier ZIP n'existe pas ou a déjà été décompressé"
