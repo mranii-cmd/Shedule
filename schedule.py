@@ -5,7 +5,6 @@ A simple application to manage events and tasks in a schedule.
 
 import json
 import os
-from datetime import datetime
 from typing import List, Optional
 
 
@@ -182,7 +181,7 @@ class ScheduleManager:
                     data = json.load(f)
                     self.next_id = data.get('next_id', 1)
                     self.events = [Event.from_dict(e) for e in data.get('events', [])]
-            except (json.JSONDecodeError, KeyError):
+            except json.JSONDecodeError:
                 print(f"Warning: Could not load data from {self.data_file}")
                 self.events = []
                 self.next_id = 1
