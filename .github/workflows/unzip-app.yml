@@ -1,0 +1,26 @@
+name: Décompresser l'application
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  unzip:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Décompresser le fichier ZIP
+        run: |
+          unzip "LectioShed7.8 5.zip"
+          rm "LectioShed7.8 5.zip"
+
+      - name: Commit et push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Décompression automatique de l'application LectioShed"
+          git push
