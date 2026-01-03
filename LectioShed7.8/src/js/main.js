@@ -53,6 +53,7 @@ import ExamRoomAllocatorIntegration from './ui/ExamRoomAllocatorIntegration.js';
 import './utils/attemptSaveSession.js';
 import './ui/BackupModal.js';
 import DatabaseService from './services/DatabaseService.js';
+import SaveStatusIndicator from './ui/SaveStatusIndicator.js';
 
 
 /**
@@ -104,12 +105,19 @@ function createOption({ value = '', text = '', attrs = {} } = {}) {
         return opt;
     } catch (e) {
         console.error('createOption error:', e);
-        // Return minimal option as fallback
-        const opt = document.createElement('option');
-        opt.value = '';
-        opt.textContent = '';
-        return opt;
+        // Return minimal option as fallback - extracted to avoid duplication
+        return createMinimalOption();
     }
+}
+
+/**
+ * Helper to create a minimal option element (used as fallback)
+ */
+function createMinimalOption() {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = '';
+    return opt;
 }
 
 /**
@@ -294,11 +302,15 @@ class EDTApplication {
 
             // Check conflits différé
             setTimeout(() => {
-                if (ConflictService && typeof ConflictService.checkAllConflicts === 'function') {
-                    ConflictService.checkAllConflicts();
-                    if (TableRenderer && typeof TableRenderer.updateConflictCounts === 'function') {
-                        TableRenderer.updateConflictCounts();
+                try {
+                    if (ConflictService && typeof ConflictService.checkAllConflicts === 'function') {
+                        ConflictService.checkAllConflicts();
+                        if (TableRenderer && typeof TableRenderer.updateConflictCounts === 'function') {
+                            TableRenderer.updateConflictCounts();
+                        }
                     }
+                } catch (e) {
+                    console.warn('Conflict check failed:', e);
                 }
             }, 1000);
 
@@ -453,6 +465,13 @@ class EDTApplication {
         }
         SpinnerManager.init('loading-overlay');
         NotificationManager.init('edt-notification-area');
+        
+        // Initialize save status indicator
+        try {
+            SaveStatusIndicator.init('header-actions');
+        } catch (e) {
+            console.warn('SaveStatusIndicator.init failed:', e);
+        }
     }
 
     /**
@@ -2839,7 +2858,8 @@ window.StateManager = StateManager;
 
 // Exposer TableRenderer pour la console et le debugging
 window.TableRenderer = TableRenderer;
-window. EDTTableRenderer = TableRenderer;
+window.EDTTableRenderer = TableRenderer;
+window.EDTSaveStatus = SaveStatusIndicator;
 
 // Aussi exposer l'instance du service si disponible
 if (StateManager && StateManager.dbService) {
