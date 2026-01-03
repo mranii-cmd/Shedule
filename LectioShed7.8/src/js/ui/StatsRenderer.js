@@ -8,7 +8,7 @@ import SubjectController from '../controllers/SubjectController.js';
 import TeacherController from '../controllers/TeacherController.js';
 import RoomController from '../controllers/RoomController.js';
 import { safeText } from '../utils/sanitizers.js';
-import { filterSubjectsByDepartment } from '../utils/helpers.js';
+import { filterSubjectsByDepartment, filterSubjectNamesByDepartment } from '../utils/helpers.js';
 // import { escapeHTML } from '../utils/sanitizers.js';
 
 class StatsRenderer {
@@ -54,14 +54,9 @@ class StatsRenderer {
         const enseignants = StateManager.state.enseignants;
         const departement = StateManager.state?.header?.departement || '';
         
-        // Filtrer les matières par département
+        // Filtrer les matières par département en utilisant la fonction helper
         const allMatieres = Object.keys(StateManager.state.matiereGroupes);
-        const matieres = departement && departement !== 'Administration'
-            ? allMatieres.filter(nom => {
-                const matiere = StateManager.state.matiereGroupes[nom];
-                return matiere && matiere.departement === departement;
-            })
-            : allMatieres;
+        const matieres = filterSubjectNamesByDepartment(allMatieres, departement, StateManager.state.matiereGroupes);
         
         const salles = Object.keys(StateManager.state.sallesInfo);
 

@@ -243,7 +243,34 @@ export function filterSubjectsByDepartment(subjects, departement) {
     
     // Filtrer par département
     return subjects.filter(subject => {
-        const subjectDept = subject.departement || subject.config?.departement || '';
+        if (!subject) return false;
+        const subjectDept = subject.departement || subject?.config?.departement || '';
+        return subjectDept === departement;
+    });
+}
+
+/**
+ * Filtre les noms de matières selon le département sélectionné
+ * Utilisé quand on travaille avec Object.keys(matiereGroupes)
+ * Exception : "Administration" ou département vide retourne tous les noms
+ * @param {Array<string>} subjectNames - Liste des noms de matières
+ * @param {string} departement - Le département sélectionné
+ * @param {Object} matiereGroupes - L'objet matiereGroupes depuis StateManager
+ * @returns {Array<string>} Les noms de matières filtrés
+ */
+export function filterSubjectNamesByDepartment(subjectNames, departement, matiereGroupes) {
+    if (!subjectNames || !Array.isArray(subjectNames)) return [];
+    
+    // Si Administration ou vide, retourner tous les noms
+    if (!departement || departement.trim() === '' || departement === 'Administration') {
+        return subjectNames;
+    }
+    
+    // Filtrer par département
+    return subjectNames.filter(nom => {
+        const config = matiereGroupes?.[nom];
+        if (!config) return false;
+        const subjectDept = config.departement || '';
         return subjectDept === departement;
     });
 }

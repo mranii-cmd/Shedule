@@ -4,7 +4,7 @@
 import StateManager from '../controllers/StateManager.js';
 import { safeText } from '../utils/sanitizers.js';
 import LogService from '../services/LogService.js'; // pour messages de confirmation si besoin
-import { filterSubjectsByDepartment } from '../utils/helpers.js';
+import { filterSubjectNamesByDepartment } from '../utils/helpers.js';
 
 class ConfigListRenderer {
     /**
@@ -72,13 +72,8 @@ class ConfigListRenderer {
         const departement = StateManager.state?.header?.departement || '';
         const allMatieres = Object.keys(StateManager.state.matiereGroupes || {});
         
-        // Filtrer par département
-        const matieres = departement && departement !== 'Administration'
-            ? allMatieres.filter(nom => {
-                const config = StateManager.state.matiereGroupes[nom] || {};
-                return config.departement === departement;
-            })
-            : allMatieres;
+        // Filtrer par département en utilisant la fonction helper
+        const matieres = filterSubjectNamesByDepartment(allMatieres, departement, StateManager.state.matiereGroupes);
 
         if (matieres.length === 0) {
             const deptNote = departement && departement !== 'Administration' ? ` pour le département ${safeText(departement)}` : '';
