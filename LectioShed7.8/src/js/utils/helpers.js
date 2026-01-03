@@ -225,3 +225,25 @@ export function formatDateFR(date = new Date()) {
         year: 'numeric' 
     });
 }
+
+/**
+ * Filtre les matières selon le département sélectionné
+ * Exception : "Administration" ou département vide affiche toutes les matières
+ * @param {Array} subjects - Liste des matières à filtrer
+ * @param {string} departement - Le département sélectionné (depuis header)
+ * @returns {Array} Les matières filtrées
+ */
+export function filterSubjectsByDepartment(subjects, departement) {
+    if (!subjects || !Array.isArray(subjects)) return [];
+    
+    // Si Administration ou vide, retourner toutes les matières
+    if (!departement || departement.trim() === '' || departement === 'Administration') {
+        return subjects;
+    }
+    
+    // Filtrer par département
+    return subjects.filter(subject => {
+        const subjectDept = subject.departement || subject.config?.departement || '';
+        return subjectDept === departement;
+    });
+}
