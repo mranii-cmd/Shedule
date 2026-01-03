@@ -92,15 +92,24 @@ function setInputValue(id, value) {
  * Utilitaires DOM sûrs — éviter innerHTML quand possible
  */
 function createOption({ value = '', text = '', attrs = {} } = {}) {
-    const opt = document.createElement('option');
-    opt.value = value;
-    // textContent protège contre injection
-    opt.textContent = text;
-    Object.entries(attrs).forEach(([k, v]) => {
-        if (v === true) opt.setAttribute(k, '');
-        else if (v !== false && v !== undefined && v !== null) opt.setAttribute(k, String(v));
-    });
-    return opt;
+    try {
+        const opt = document.createElement('option');
+        opt.value = String(value ?? '');
+        // textContent protège contre injection
+        opt.textContent = String(text ?? '');
+        Object.entries(attrs).forEach(([k, v]) => {
+            if (v === true) opt.setAttribute(k, '');
+            else if (v !== false && v !== undefined && v !== null) opt.setAttribute(k, String(v));
+        });
+        return opt;
+    } catch (e) {
+        console.error('createOption error:', e);
+        // Return minimal option as fallback
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = '';
+        return opt;
+    }
 }
 
 /**
@@ -112,18 +121,39 @@ function createOption({ value = '', text = '', attrs = {} } = {}) {
  * - makeAttrsFn: fn(item) => { attrName: attrValue } (optionnel)
  */
 function populateSelectSafe(selectEl, items = [], valueFn = x => x, textFn = x => x, makeAttrsFn = null, emptyLabel = '-- Sélectionner --') {
-    if (!selectEl) return;
-    // vider en utilisant DOM
-    while (selectEl.firstChild) selectEl.removeChild(selectEl.firstChild);
-    selectEl.appendChild(createOption({ value: '', text: emptyLabel }));
+    if (!selectEl) {
+        console.warn('populateSelectSafe: selectEl is null');
+        return;
+    }
+    
+    try {
+        // vider en utilisant DOM
+        while (selectEl.firstChild) selectEl.removeChild(selectEl.firstChild);
+        selectEl.appendChild(createOption({ value: '', text: emptyLabel }));
 
-    items.forEach(item => {
-        const value = valueFn(item);
-        const text = textFn(item);
-        const attrs = makeAttrsFn ? makeAttrsFn(item) : {};
-        const opt = createOption({ value: value === undefined || value === null ? '' : value, text: text || '', attrs });
-        selectEl.appendChild(opt);
-    });
+        if (!Array.isArray(items)) {
+            console.warn('populateSelectSafe: items is not an array');
+            return;
+        }
+
+        items.forEach((item, index) => {
+            try {
+                const value = valueFn(item);
+                const text = textFn(item);
+                const attrs = makeAttrsFn ? makeAttrsFn(item) : {};
+                const opt = createOption({ 
+                    value: value === undefined || value === null ? '' : value, 
+                    text: text || '', 
+                    attrs 
+                });
+                selectEl.appendChild(opt);
+            } catch (e) {
+                console.error(`populateSelectSafe: error processing item at index ${index}:`, e);
+            }
+        });
+    } catch (e) {
+        console.error('populateSelectSafe: error:', e);
+    }
 }
 
 /**
@@ -165,15 +195,20 @@ class EDTApplication {
       */
     async init() {
         console.log(`🚀 Initialisation de l'application EDT v${this.version}...`);
+        
         // --- Auth check (redirect to login if not authenticated) ---
         try {
             const dbAuth = new DatabaseService();
             // Try to open / health-check (no-op if backend unreachable)
-            try { await dbAuth.open(); } catch (e) { /* ignore open error */ }
+            try { 
+                await dbAuth.open(); 
+            } catch (e) { 
+                console.debug('Database open check failed (expected if backend unreachable):', e.message);
+            }
+            
             // If not authenticated, redirect to login page with redirect param
             if (!dbAuth.isAuthenticated()) {
                 const redirect = encodeURIComponent(window.location.pathname + window.location.search);
-                // Use login.html (create it if not present) — adjust path if your login route differs
                 window.location.replace(`/login.html?redirect=${redirect}`);
                 return; // stop app init
             }
@@ -185,15 +220,17 @@ class EDTApplication {
         try {
             // 1. UI Managers & Spinner
             this.initializeUIManagers();
-            // SpinnerManager.show('Chargement de la base de données...');
             SpinnerManager.show();
 
             // 2. Chargement des données (ASYNC - IndexedDB)
+            if (!StateManager) {
+                throw new Error('StateManager not available');
+            }
             await StateManager.init();
 
             // 3. Gestion des Créneaux
-            const stateCreneaux = (StateManager && StateManager.state && StateManager.state.creneaux) ? StateManager.state.creneaux : null;
-            if (!stateCreneaux || Object.keys(stateCreneaux).length === 0) {
+            const stateCreneaux = StateManager?.state?.creneaux;
+            if (!stateCreneaux || (typeof stateCreneaux === 'object' && Object.keys(stateCreneaux).length === 0)) {
                 console.warn('⚠️ Créneaux manquants - initialisation par défaut');
                 initCreneaux(); // initialise avec la configuration par défaut
                 try {
@@ -206,7 +243,11 @@ class EDTApplication {
             } else {
                 initCreneaux(stateCreneaux);
             }
+            
             // 4. Sécurisation des données
+            if (!StateManager.state) {
+                StateManager.state = {};
+            }
             if (!Array.isArray(StateManager.state.examens)) StateManager.state.examens = [];
             if (!Array.isArray(StateManager.state.examRoomConfigs)) StateManager.state.examRoomConfigs = [];
             if (!StateManager.state.header) StateManager.state.header = {};
@@ -253,9 +294,11 @@ class EDTApplication {
 
             // Check conflits différé
             setTimeout(() => {
-                if (window.EDTConflictService) {
+                if (ConflictService && typeof ConflictService.checkAllConflicts === 'function') {
                     ConflictService.checkAllConflicts();
-                    TableRenderer.updateConflictCounts();
+                    if (TableRenderer && typeof TableRenderer.updateConflictCounts === 'function') {
+                        TableRenderer.updateConflictCounts();
+                    }
                 }
             }, 1000);
 
@@ -263,8 +306,13 @@ class EDTApplication {
 
         } catch (error) {
             console.error('❌ Erreur init:', error);
-            NotificationManager.error('Erreur chargement: ' + error.message);
+            NotificationManager.error('Erreur chargement: ' + (error?.message || 'Unknown error'));
             SpinnerManager.hide();
+            
+            // Try to show a helpful error dialog
+            if (DialogManager && typeof DialogManager.error === 'function') {
+                DialogManager.error('Erreur lors de l\'initialisation de l\'application. Veuillez rafraîchir la page.');
+            }
         }
     }
     // Ajoute ceci dans la classe EDTApplication
