@@ -623,41 +623,47 @@ class StateManager {
      * Change la session active
      * @param {string} newSession - La nouvelle session
      */
-    async changeSession(newSessionName) {
-        const snapshot = snapshotCurrentSession(this.state);
-        this.state.sessions[curName] = snapshot;
-        // Sauvegarder l'ancienne session puis charger la nouvelle via loadSession
-        try {
-            const curName = (this.state && this.state.header && this.state.header.session) ? String(this.state.header.session) : null;
-            if (curName) {
-                if (!this.state.sessions || typeof this.state.sessions !== 'object') this.state.sessions = {};
-                try {
-                    this.state.sessions[curName] = {
-                        seances: Array.isArray(this.state.seances) ? JSON.parse(JSON.stringify(this.state.seances)) : (this.state.seances || []),
-                        nextSessionId: this.state.nextSessionId || 1,
-                        header: this.state.header ? JSON.parse(JSON.stringify(this.state.header)) : { session: curName },
-                        examens: Array.isArray(this.state.examens) ? JSON.parse(JSON.stringify(this.state.examens)) : (this.state.examens || []),
-                        examRoomConfigs: Array.isArray(this.state.examRoomConfigs) ? JSON.parse(JSON.stringify(this.state.examRoomConfigs)) : (this.state.examRoomConfigs || []),
-                        creneaux: (this.state.creneaux && typeof this.state.creneaux === 'object') ? JSON.parse(JSON.stringify(this.state.creneaux)) : { ...DEFAULT_CRENEAUX }
-                    };
-                } catch (e) {
-                    this.state.sessions[curName] = {
-                        seances: this.state.seances || [],
-                        nextSessionId: this.state.nextSessionId || 1,
-                        header: this.state.header || { session: curName },
-                        examens: this.state.examens || [],
-                        examRoomConfigs: this.state.examRoomConfigs || [],
-                        creneaux: this.state.creneaux || { ...DEFAULT_CRENEAUX }
-                    };
-                }
+    /**
+ * Change la session active
+ * @param {string} newSessionName - La nouvelle session
+ */
+async changeSession(newSessionName) {
+    // 1. D'abord déclarer curName
+    const curName = (this.state && this.state.header && this.state.header.session) 
+        ? String(this.state.header.session) 
+        : null;
+    
+    // 2. Ensuite sauvegarder la session actuelle
+    try {
+        if (curName) {
+            if (! this.state.sessions || typeof this.state.sessions !== 'object') {
+                this.state.sessions = {};
             }
-        } catch (e) {
-            LogService && LogService.debug && LogService.debug('changeSession: failed to snapshot current session into sessions map', e);
+            
+            // Créer le snapshot
+            const snapshot = snapshotCurrentSession(this.state);
+            this.state.sessions[curName] = snapshot;
+            
+            // Version alternative si snapshotCurrentSession n'est pas disponible : 
+            /*
+            this.state.sessions[curName] = {
+                seances: Array.isArray(this.state.seances) ? JSON.parse(JSON.stringify(this.state.seances)) : (this.state.seances || []),
+                nextSessionId: this.state.nextSessionId || 1,
+                header: this.state.header ?  JSON.parse(JSON.stringify(this.state.header)) : { session: curName },
+                examens: Array.isArray(this.state. examens) ? JSON.parse(JSON.stringify(this.state. examens)) : (this.state.examens || []),
+                examRoomConfigs: Array.isArray(this.state.examRoomConfigs) ? JSON.parse(JSON.stringify(this.state.examRoomConfigs)) : (this.state.examRoomConfigs || []),
+                creneaux: (this.state.creneaux && typeof this.state.creneaux === 'object') ? JSON.parse(JSON.stringify(this.state.creneaux)) : { ... DEFAULT_CRENEAUX }
+            };
+            */
         }
-
-        await this.saveState(true);
-        await this.loadSession(newSessionName);
+    } catch (e) {
+        LogService && LogService.debug && LogService.debug('changeSession:  failed to snapshot current session into sessions map', e);
     }
+
+    // 3. Sauvegarder et charger la nouvelle session
+    await this.saveState(true);
+    await this.loadSession(newSessionName);
+}
 
     /**
      * Obtient toutes les séances

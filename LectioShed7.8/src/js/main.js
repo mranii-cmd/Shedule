@@ -7,6 +7,7 @@
  */
 
 // === IMPORTS ===
+
 import { initCreneaux } from './utils/helpers.js';
 import StateManager from './controllers/StateManager.js';
 import SessionController from './controllers/SessionController.js';
@@ -52,6 +53,7 @@ import ExamRoomAllocatorIntegration from './ui/ExamRoomAllocatorIntegration.js';
 import './utils/attemptSaveSession.js';
 import './ui/BackupModal.js';
 import DatabaseService from './services/DatabaseService.js';
+
 
 /**
  * Configuration: contrôler l'exposition globale
@@ -2783,7 +2785,18 @@ window.EDTState = StateManager;
 window.EDTStorage = StorageService;
 window.EDTDialog = DialogManager;
 window.EDTNotification = NotificationManager;
+// Exposer DatabaseService et StateManager pour la console
+window.DatabaseService = DatabaseService;
+window.StateManager = StateManager;
 
+// Exposer TableRenderer pour la console et le debugging
+window.TableRenderer = TableRenderer;
+window. EDTTableRenderer = TableRenderer;
+
+// Aussi exposer l'instance du service si disponible
+if (StateManager && StateManager.dbService) {
+    window.dbService = StateManager.dbService;
+}
 // Exposer l'instance EventHandlers globalement de façon permanente :
 // Plusieurs éléments HTML et renderers utilisent des handlers inline (ex: ondragover="EDTHandlers.handleDragOver(event)")
 // Il est nécessaire que window.EDTHandlers référence l'instance exportée (EventHandlers) — pas une fusion

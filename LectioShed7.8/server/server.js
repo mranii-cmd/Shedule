@@ -8,6 +8,7 @@ const express = require('express');
 const mysql = require('mysql2/promise');
 const helmet = require('helmet');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -26,7 +27,7 @@ const loginLimiter = rateLimit({
 
 app.use('/api/login', loginLimiter);
 const DB_CONFIG = {
-  host: process.env.DB_HOST || '127.0.0.1',
+  host: process.env.DB_HOST || 'mysql',
   user: process.env.DB_USER || 'edt_user',
   password: process.env.DB_PASS || 'secret',
   database: process.env.DB_NAME || 'edt_db',

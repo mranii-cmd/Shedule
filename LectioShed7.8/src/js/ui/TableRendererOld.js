@@ -86,27 +86,8 @@ class TableRenderer {
                 }
             });
         }
-        // ✅ NOUVEAU : Écouteur sur le changement de département
-        this.initDepartmentListener();
     }
-    /**
-     * Initialise l'écouteur sur le sélecteur de département
-     */
-    initDepartmentListener() {
-        try {
-            const selectDept = document.getElementById('selectDepartement');
-            if (selectDept && !selectDept.dataset.tableRendererAttached) {
-                selectDept.addEventListener('change', () => {
-                    console.log('TableRenderer: Changement de département détecté');
-                    this.render();
-                });
-                selectDept.dataset.tableRendererAttached = '1';
-                console.log('✅ TableRenderer: Écouteur département attaché');
-            }
-        } catch (error) {
-            console.error('TableRenderer. initDepartmentListener error:', error);
-        }
-    }
+
     setFilter(filter) {
         this.currentFilter = filter;
     }
@@ -118,10 +99,6 @@ class TableRenderer {
     getFilteredSeances() {
         let seances = StateManager.getSeances();
 
-        // ✅ NOUVEAU : Filtrer par département EN PREMIER
-        seances = this.filterByDepartment(seances);
-
-        // Filtrer par filière (vue)
         if (this.currentFilter === 'enseignant_selectionne') {
             const teacher = this.getSelectedTeacher();
             if (teacher) {
@@ -133,7 +110,6 @@ class TableRenderer {
             seances = seances.filter(s => s.filiere === this.currentFilter);
         }
 
-        // Filtres de recherche
         const { matiere, enseignant, salle, sectionGroupe } = this.searchFilters;
 
         if (matiere || enseignant || salle || sectionGroupe) {
@@ -154,70 +130,6 @@ class TableRenderer {
         const ens1 = document.getElementById('inputEnseignant1')?.value || '';
         const ens2 = document.getElementById('inputEnseignant2')?.value || '';
         return ens2 || ens1 || null;
-    }
-
-    /**
-     * Filtre les séances selon le département sélectionné
-     * Exception : "Administration" affiche tout
-     * @param {Array} seances - Toutes les séances
-     * @returns {Array} Séances filtrées
-     */
-    filterByDepartment(seances) {
-        try {
-            // Récupérer le département sélectionné dans l'en-tête
-            const selectDept = document.getElementById('selectDepartement');
-            if (!selectDept) {
-                console.debug('TableRenderer:  selectDepartement introuvable');
-                return seances;
-            }
-
-            const selectedDept = selectDept.value?.trim();
-
-            // Si vide ou "Administration", afficher tout
-            if (!selectedDept || selectedDept === '' || selectedDept.toLowerCase() === 'administration') {
-                console.log('TableRenderer: Aucun filtre département (Administration ou vide)');
-                return seances;
-            }
-
-            console.log('TableRenderer: Filtrage par département:', selectedDept);
-
-            // Récupérer les matières depuis StateManager
-            const matiereGroupes = StateManager?.state?.matiereGroupes || {};
-
-            // Filtrer les séances
-            const filtered = seances.filter(seance => {
-                if (!seance || !seance.matiere) return false;
-
-                const matiereConfig = matiereGroupes[seance.matiere];
-
-                // Si la matière n'a pas de config, on l'affiche quand même
-                if (!matiereConfig) {
-                    console.debug(`TableRenderer: Matière sans config:  ${seance.matiere}`);
-                    return true;
-                }
-
-                // Récupérer le département de la matière
-                const matiereDept = matiereConfig.departement?.trim() || '';
-
-                // Comparaison insensible à la casse
-                const match = matiereDept.toLowerCase() === selectedDept.toLowerCase();
-
-                if (!match) {
-                    console.debug(`TableRenderer: Séance filtrée: ${seance.matiere} (dept: ${matiereDept} ≠ ${selectedDept})`);
-                }
-
-                return match;
-            });
-
-            console.log(`TableRenderer: ${seances.length} séances → ${filtered.length} après filtre département`);
-
-            return filtered;
-
-        } catch (error) {
-            console.error('TableRenderer. filterByDepartment error:', error);
-            // En cas d'erreur, retourner toutes les séances
-            return seances;
-        }
     }
 
     hasActiveSearch() {
