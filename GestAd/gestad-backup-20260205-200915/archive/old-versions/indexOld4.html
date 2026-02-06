@@ -1,0 +1,3000 @@
+<!doctype html>
+<html lang="fr">
+
+<head>
+  <meta charset="utf-8" />
+  <title>EDT - GestAd (UI skeleton)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <!-- Base styles (existing) -->
+  <link rel="stylesheet" href="/static/styles.css" />
+
+  <!-- EDT cards styles (served from /static) -->
+  <link rel="stylesheet" href="/static/edt-events.css" />
+  <!-- Header styles -->
+  <link rel="stylesheet" href="/static/header.css" />
+
+  <style>
+    /* --- Simple tabbed layout styles --- */
+    :root {
+      --tab-bg: #f8fafc;
+      --tab-active: #667eea;
+      --tab-color: #334155;
+      --muted: #6c757d;
+      --container-max: 1100px;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      margin: 1rem;
+      color: var(--tab-color);
+      background: #f6f8fb;
+    }
+
+    .page {
+      max-width: var(--container-max);
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 1rem;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #0f1722;
+    }
+
+    header .page-subtitle {
+      color: var(--muted);
+      margin-top: 6px;
+      font-size: .95rem;
+    }
+
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin: 18px 0;
+      background: var(--tab-bg);
+      padding: 8px;
+      border-radius: 12px;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      padding: 10px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 700;
+      color: var(--muted);
+      transition: all .15s ease;
+    }
+
+    .tab-btn[aria-selected="true"] {
+      background: linear-gradient(90deg, var(--tab-active), #764ba2);
+      color: white;
+      box-shadow: 0 8px 24px rgba(102, 126, 234, 0.12);
+    }
+
+    .tab-btn:focus {
+      outline: 3px solid rgba(102, 126, 234, 0.14);
+    }
+
+    /* Tab panels */
+    .tab-panel {
+      display: none;
+      padding: 10px 0;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    /* Layout inside panels - keep compact */
+    .panel-grid {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 18px;
+      align-items: start;
+    }
+
+    @media (max-width:980px) {
+      .panel-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Documents list simple styles */
+    .docs-list {
+      background: white;
+      border-radius: 10px;
+      border: 1px solid #eef2f8;
+      padding: 14px;
+      box-shadow: 0 6px 18px rgba(16, 24, 40, 0.04);
+    }
+
+    .docs-list ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .docs-list li {
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #f1f5f9;
+      display: flex;
+      justify-content: space-between;
+      background: #fff;
+      align-items: center;
+    }
+
+    /* Documents cards and action buttons */
+    .docs-doc-card {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid #eef6ff;
+      background: linear-gradient(180deg, #fff, #fbfdff);
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+
+    .docs-doc-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 30px rgba(16, 24, 40, 0.06);
+    }
+
+    .docs-doc-card .left .title {
+      font-weight: 700;
+      color: #0f1722;
+      display: block;
+    }
+
+    .docs-doc-card .left .meta {
+      color: var(--muted);
+      font-size: 0.92rem;
+      display: block;
+      margin-top: 6px;
+    }
+
+    .docs-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .doc-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      background: transparent;
+      cursor: pointer;
+      font-weight: 700;
+      color: var(--muted);
+    }
+
+    .doc-action:hover {
+      background: rgba(102, 126, 234, 0.06);
+      color: #0f1722;
+    }
+
+    .doc-action.danger {
+      color: #9b1c1c;
+    }
+
+    .doc-action .icon {
+      width: 16px;
+      height: 16px;
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    .docs-actions button {
+      margin-left: 8px;
+    }
+
+    /* small category buttons */
+    .doc-cat-btn {
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: transparent;
+      border: 1px solid transparent;
+      cursor: pointer;
+      color: var(--muted);
+    }
+
+    .doc-cat-btn[aria-pressed="true"] {
+      background: linear-gradient(90deg, var(--tab-active), #764ba2);
+      color: white;
+      border-color: rgba(0, 0, 0, 0.04);
+    }
+
+    /* Agenda (placeholder) */
+    .agenda {
+      background: linear-gradient(180deg, #ffffff, #fbfdff);
+      border-radius: 12px;
+      padding: 14px;
+      border: 1px solid #eef2f8;
+    }
+
+    /* Resources */
+    .resources-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* Small helpers */
+    .muted {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .center {
+      text-align: center;
+    }
+
+    /* Ensure events container uses EDT styles */
+    #events {
+      min-height: 120px;
+    }
+
+    /* Additional minor styles for upload UI */
+    .edt-input,
+    .edt-textarea,
+    .edt-select {
+      box-sizing: border-box;
+      width: 100%;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid #e6eef6;
+      background: white;
+    }
+
+    .edt-btn {
+      display: inline-block;
+      padding: 8px 12px;
+      background: linear-gradient(90deg, var(--tab-active), #764ba2);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Simple search bar styles */
+    #searchBar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin: 12px 0;
+    }
+
+    #searchBar input.edt-input {
+      flex: 1;
+    }
+
+    /* LOGIN modal styles (insertion) */
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(2, 6, 23, 0.55);
+      z-index: 1200;
+      padding: 20px;
+    }
+
+    .modal.hidden {
+      display: none;
+    }
+
+    .modal-content {
+      width: 100%;
+      max-width: 420px;
+      background: white;
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 10px 40px rgba(2, 6, 23, 0.3);
+    }
+
+    .page.locked {
+      filter: blur(2px) grayscale(.02);
+      pointer-events: none;
+      user-select: none;
+    }
+
+    /* Classeur (folder) styles for Legislation sidebar */
+    .classeur {
+      width: 100%;
+      max-width: 320px;
+      perspective: 900px;
+      margin-top: 8px;
+    }
+
+    .classeur-cover {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      padding: 10px 12px;
+      background: linear-gradient(180deg, #f8fafc, #eef6ff);
+      border-radius: 10px;
+      border: 1px solid #e6eef6;
+      cursor: pointer;
+      transform-origin: top center;
+      transition: transform .45s cubic-bezier(.2, .9, .2, 1), box-shadow .2s;
+      box-shadow: 0 4px 10px rgba(16, 24, 40, 0.04);
+      font-weight: 700;
+    }
+
+    .classeur-cover .classeur-count {
+      background: #fff;
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 0.85rem;
+      color: #334155;
+      border: 1px solid rgba(0, 0, 0, 0.04);
+    }
+
+    .classeur.open .classeur-cover {
+      transform: rotateX(-12deg) translateY(-6px);
+      box-shadow: 0 14px 30px rgba(16, 24, 40, 0.12);
+    }
+
+    .classeur-body {
+      overflow: hidden;
+      max-height: 0;
+      transition: max-height .42s cubic-bezier(.2, .9, .2, 1);
+      transform-origin: top center;
+      will-change: max-height;
+      margin-top: 8px;
+    }
+
+    .classeur-list {
+      background: #fff;
+      border-radius: 8px;
+      border: 1px solid #eef2f8;
+      padding: 8px;
+      box-shadow: 0 6px 18px rgba(16, 24, 40, 0.04);
+      max-height: 220px;
+      overflow: auto;
+    }
+
+    .classeur-item {
+      padding: 8px;
+      border-bottom: 1px dashed #f1f5f9;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity .32s ease, transform .32s ease;
+    }
+
+    .classeur-item.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .classeur-item a.title {
+      font-weight: 700;
+      color: #0f1722;
+      text-decoration: none;
+    }
+
+    .classeur-item .muted {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+
+<body>
+  <div id="loginModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+    <div class="modal-content" role="document">
+      <h3 id="loginTitle">Connexion</h3>
+      <form id="loginForm" style="display:flex; flex-direction:column; gap:8px;">
+        <input id="loginUsername" class="edt-input" placeholder="Nom d'utilisateur" autocomplete="username" />
+        <input id="loginPassword" class="edt-input" type="password" placeholder="Mot de passe"
+          autocomplete="current-password" />
+        <div style="display:flex; gap:8px; margin-top:6px;">
+          <button id="btnLogin" type="button" class="edt-btn">Se connecter</button>
+          <button id="btnCancelLogin" type="button" class="edt-btn"
+            style="background:#f1f5f9;color:#0f1722">Annuler</button>
+        </div>
+        <div id="loginMsg" class="muted" style="margin-top:6px;"></div>
+      </form>
+    </div>
+  </div>
+  <div class="page" id="appPage">
+    <header>
+      <h1>GestAd v1.0</h1>
+      <span class="page-subtitle">Gestion des évènements, documents et ressources — Interface unifiée</span>
+    </header>
+    <!-- improved application header (replaces previous simple header) -->
+    <header id="appHeader" role="banner" aria-label="En-tête de l'application">
+      <div class="left">
+        <a href="/" class="logo" id="appLogo">
+          <span class="title">GestAd v1.0</span>
+        </a>
+      </div>
+
+      <div class="center">
+        <div class="search" role="search" aria-label="Recherche globale">
+          <input id="headerSearch" type="search" placeholder="Rechercher événements, documents..."
+            aria-label="Recherche" />
+          <button id="headerSearchBtn" class="btn primary" aria-label="Lancer la recherche">Rechercher</button>
+        </div>
+
+        <div class="filters" aria-hidden="false" style="margin-left:8px">
+          <select id="headerFilterType" title="Filtrer par type (documents)">
+            <option value="">Type</option>
+          </select>
+          <select id="headerFilterYear" title="Filtrer par année">
+            <option value="">Année</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="right user" role="navigation" aria-label="Utilisateur">
+        <div id="headerUserInfo" class="user-info">
+          <span id="headerUsername" class="username" aria-hidden="true"></span>
+          <button id="headerLoginBtn" class="btn">Se connecter</button>
+          <button id="headerLogoutBtn" class="btn" style="display:none">Se déconnecter</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Auth user info (kept for display only; login handled through modal) -->
+
+    <!-- Search bar inserted to satisfy app.js expectations (#q and #btnSearch) -->
+    <div id="searchBar">
+      <input id="q" class="edt-input" placeholder="Rechercher..." aria-label="Rechercher" />
+      <button id="btnSearch" class="edt-btn" type="button">Rechercher</button>
+    </div>
+
+    <!-- GLOBAL SEARCH RESULTS: inserted below the search bar -->
+    <div id="globalSearchResults" class="docs-list hidden" style="margin-top:12px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <strong>Résultats de recherche</strong>
+        <button id="btnClearGlobalSearch" class="tab-btn" style="padding:6px 10px;">Effacer</button>
+      </div>
+      <div id="globalSearchMsg" class="muted" style="margin-bottom:8px;"></div>
+      <div id="globalSearchBuckets" style="display:flex; flex-direction:column; gap:12px;"></div>
+    </div>
+
+    <!-- Accessible tab list -->
+    <div role="tablist" aria-label="Navigation principale" class="tabs" id="mainTabs">
+      <button class="tab-btn" role="tab" id="tab-button-events" aria-controls="panel-events" aria-selected="true"
+        tabindex="0">Événements</button>
+      <button class="tab-btn" role="tab" id="tab-button-docs" aria-controls="panel-docs" aria-selected="false"
+        tabindex="-1">Documents administratifs</button>
+
+      <button class="tab-btn" role="tab" id="tab-button-legislation" aria-controls="panel-legislation"
+        aria-selected="false" tabindex="-1">Législation</button>
+
+      <button class="tab-btn" role="tab" id="tab-button-agenda" aria-controls="panel-agenda" aria-selected="false"
+        tabindex="-1">Agenda</button>
+      <button class="tab-btn" role="tab" id="tab-button-resources" aria-controls="panel-resources" aria-selected="false"
+        tabindex="-1">Ressources</button>
+    </div>
+
+    <!-- Panels -->
+    <main>
+      <!-- EVENTS panel -->
+      <section id="panel-events" class="tab-panel active" role="tabpanel" aria-labelledby="tab-button-events">
+        <div class="panel-grid">
+          <div>
+            <h2>Événements</h2>
+            <!-- INSERT this block inside the EVENTS panel, for example directly AFTER the <h2>Événements</h2> line and BEFORE the <div id="events"> container -->
+            <section id="createSection" style="display:none; margin-bottom:1rem;">
+              <h3>Créer un événement</h3>
+              <form id="createForm" style="display:flex; flex-direction:column; gap:8px;">
+                <input id="title" class="edt-input" placeholder="Titre" autocomplete="off" />
+                <textarea id="description" class="edt-textarea" rows="3"
+                  placeholder="Description (optionnel)"></textarea>
+                <input id="start_date" type="date" class="edt-input" />
+                <label style="display:flex; gap:8px; align-items:center;">
+                  Heure de début
+                  <input id="start_time" type="time" class="edt-input" style="max-width:150px; margin-left:8px;" />
+                </label>
+
+                <label style="display:flex; gap:8px; align-items:center; margin-top:6px;">
+                  Date de fin (optionnel)
+                  <input id="end_date" type="date" class="edt-input" style="max-width:170px; margin-left:8px;" />
+                </label>
+                <label style="display:flex; gap:8px; align-items:center;">
+                  Heure de fin (optionnel)
+                  <input id="end_time" type="time" class="edt-input" style="max-width:150px; margin-left:8px;" />
+                </label>
+                <label style="display:flex; align-items:center; gap:8px;">
+                  <input id="all_day" type="checkbox" /> <span>Journée entière</span>
+                </label>
+                <div style="display:flex; gap:8px;">
+                  <button id="btnCreateFull" type="button" class="edt-btn">Créer</button>
+                  <button id="btnCancelCreate" type="button" class="edt-btn"
+                    style="background:#f1f5f9;color:#0f1722">Annuler</button>
+                </div>
+                <div id="createMsg" class="muted" style="margin-top:6px;"></div>
+              </form>
+            </section>
+            <!-- The EDT renderer will fill this container -->
+            <div id="events" data-edt-auto="events" data-edt-api="/api/events">Chargement des événements…</div>
+            <!-- Ajouter juste après <div id="events" ...> -->
+            <div style="text-align:center; margin-top:12px;">
+              <button id="loadMore" class="edt-btn" type="button">Charger plus</button>
+            </div>
+          </div>
+
+
+          <aside class="edt-side-panel">
+            <h3>Créer un événement</h3>
+            <form id="quickCreateForm">
+              <label>Titre
+                <input id="qTitle" class="edt-input" />
+              </label>
+              <label>Description
+                <textarea id="qDesc" class="edt-textarea" rows="3"></textarea>
+              </label>
+              <label>Date
+                <input id="qDate" type="date" class="edt-input" />
+              </label>
+              <label>Heure de début
+                <input id="qStartTime" type="time" class="edt-input" style="max-width:150px;" />
+              </label>
+
+              <label>Heure de fin
+                <input id="qEndTime" type="time" class="edt-input" style="max-width:150px;" />
+              </label>
+
+              <label>
+                <input id="qAllDay" type="checkbox" /> Journée entière
+              </label>
+              <!-- keep quick create button id unique -->
+              <button id="btnCreateQuick" type="button" class="edt-btn">Créer</button>
+            </form>
+
+            <div style="margin-top:16px;">
+              <h4 style="margin:0 0 8px 0;">Filtres rapides</h4>
+              <div class="muted">Filtrer par type / lieu / créateur (fonctionnalité ultérieure)</div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- DOCUMENTS panel (modifié : catégories + upload + save) -->
+      <section id="panel-docs" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-docs">
+        <div class="panel-grid">
+          <div>
+            <h2>Documents administratifs</h2>
+
+            <!-- Category selector -->
+            <div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+              <strong style="margin-right:8px;">Catégorie :</strong>
+              <button class="doc-cat-btn" data-cat="proces-verbaux" aria-pressed="true">Procès-verbaux</button>
+              <button class="doc-cat-btn" data-cat="attestations" aria-pressed="false">Attestations</button>
+              <button class="doc-cat-btn" data-cat="bordereaux" aria-pressed="false">Bordereaux</button>
+              <button class="doc-cat-btn" data-cat="annonces" aria-pressed="false">Annonces</button>
+              <div style="margin-left:auto;" class="muted">Sélectionnez une catégorie pour filtrer</div>
+            </div>
+            <!-- Insert just above the documents list to satisfy app.js container lookup -->
+            <div id="documents" class="hidden" aria-hidden="true"></div>
+            <!-- Documents list: dynamic -->
+            <div class="docs-list" id="docsList">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <strong id="docsListTitle">Documents — Procès-verbaux</strong>
+                <div>
+                  <input id="docSearch" placeholder="Rechercher..."
+                    style="padding:6px 8px;border-radius:8px;border:1px solid #eef2f8" />
+                  <button id="btnUploadDoc" class="edt-btn"
+                    style="padding:6px 10px;font-size:0.9rem;margin-left:8px;">Téléverser</button>
+                  <!-- Save button to persist changes -->
+                  <button id="btnSaveDocs" class="edt-btn"
+                    style="padding:6px 10px;font-size:0.9rem;margin-left:8px;background:#10a37f">Enregistrer</button>
+                </div>
+              </div>
+
+              <ul id="docsItems" aria-live="polite">
+                <!-- items injected by JS -->
+              </ul>
+
+              <div id="docsEmpty" class="edt-empty hidden">Aucun document pour cette catégorie.</div>
+              <div id="docsSaveMsg" class="muted" style="margin-top:8px;"></div>
+            </div>
+          </div>
+
+          <aside class="edt-side-panel">
+            <h3>Importer un document</h3>
+            <form id="uploadDocForm">
+              <label style="display:block; margin-top:8px;">
+                Fichier
+                <input id="uploadFile" type="file" accept=".pdf,.doc,.docx,.xlsx,.xls,.png,.jpg"
+                  style="width:100%; margin-top:6px;" />
+              </label>
+
+              <label style="display:block; margin-top:8px;">
+                Titre
+                <input id="uploadTitle" class="edt-input" placeholder="Titre du document" />
+              </label>
+
+              <label style="display:block; margin-top:8px;">
+                Catégorie
+                <select id="uploadCategory" class="edt-select">
+                  <option value="proces-verbaux">Procès-verbaux</option>
+                  <option value="attestations">Attestations</option>
+                  <option value="bordereaux">Bordereaux</option>
+                  <option value="annonces">Annonces</option>
+                </select>
+              </label>
+
+              <label style="display:block; margin-top:8px;">
+                Description (optionnel)
+                <textarea id="uploadDesc" class="edt-textarea" rows="3"></textarea>
+              </label>
+
+              <div style="display:flex; gap:8px; margin-top:12px;">
+                <button id="uploadSubmit" type="button" class="edt-btn">Téléverser</button>
+                <button id="uploadReset" type="button" class="edt-btn"
+                  style="background:#f1f5f9;color:#0f1722">Réinitialiser</button>
+              </div>
+
+              <div id="uploadMsg" style="margin-top:10px;" class="muted"></div>
+            </form>
+
+            <div style="margin-top:16px;">
+              <h4 style="margin:0 0 8px 0;">Actions rapides</h4>
+              <button id="btnDownloadTemplate" class="edt-btn" style="padding:8px 10px; font-size:0.95rem;">Télécharger
+                Template Excel</button>
+            </div>
+          </aside>
+        </div>
+
+        <!-- Documents panel script (mock store; replace with API calls in production) -->
+        <script>
+          (function () {
+            // Initialize docsStore and perform a safe async merge of server data + recent local persisted data.
+            (function () {
+              const defaultStore = {
+                'proces-verbaux': [],
+                'attestations': [],
+                'bordereaux': [],
+                'annonces': []
+              };
+              window.docsStore = defaultStore;
+              window._docsStorePolicy = localStorage.getItem('docsStorePolicy');
+              window._docsStoreHadPersisted = !!localStorage.getItem('docsStore');
+
+              // Load raw server data and return it (may be array or object keyed by category)
+              async function loadServerDocsRaw() {
+                try {
+                  const token = localStorage.getItem('token') || '';
+                  const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+                  const res = await fetch('/api/documents', { headers });
+                  if (!res.ok) {
+                    console.debug('loadServerDocsRaw: server returned', res.status);
+                    return null;
+                  }
+                  const data = await res.json().catch(() => null);
+                  return data;
+                } catch (e) {
+                  console.debug('loadServerDocsRaw failed', e);
+                  return null;
+                }
+              }
+
+              // Merge server data into window.docsStore (do not blindly overwrite local pending items)
+              function mergeServerData(data) {
+                if (!data) return;
+                const cats = ['proces-verbaux', 'attestations', 'bordereaux', 'annonces'];
+                if (Array.isArray(data)) {
+                  // flatten -> place in default cat 'proces-verbaux' but merge by id to avoid duplicates
+                  const arr = data.slice();
+                  window.docsStore['proces-verbaux'] = window.docsStore['proces-verbaux'] || [];
+                  arr.forEach(it => {
+                    if (!it || !it.id) return;
+                    const exists = Object.values(window.docsStore).some(list => list.some(x => x && x.id === it.id));
+                    if (!exists) window.docsStore['proces-verbaux'].push(it);
+                    else {
+                      // update existing item fields
+                      Object.keys(window.docsStore).forEach(k => {
+                        const idx = (window.docsStore[k] || []).findIndex(x => x && x.id === it.id);
+                        if (idx > -1) window.docsStore[k][idx] = Object.assign({}, window.docsStore[k][idx], it);
+                      });
+                    }
+                  });
+                } else if (data && typeof data === 'object') {
+                  cats.forEach(k => {
+                    const arr = Array.isArray(data[k]) ? data[k] : [];
+                    window.docsStore[k] = window.docsStore[k] || [];
+                    arr.forEach(it => {
+                      if (!it) return;
+                      if (it.id) {
+                        const idx = window.docsStore[k].findIndex(x => x && x.id === it.id);
+                        if (idx > -1) window.docsStore[k][idx] = Object.assign({}, window.docsStore[k][idx], it);
+                        else window.docsStore[k].push(it);
+                      } else {
+                        // no id -> push if similar title not present
+                        const exists = window.docsStore[k].some(x => x && x.title === it.title);
+                        if (!exists) window.docsStore[k].push(it);
+                      }
+                    });
+                  });
+                }
+              }
+
+              // Initialize docs: load server, merge local persisted if recent and keep local pending items
+              async function initDocs() {
+                const serverRaw = await loadServerDocsRaw();
+                // First merge server data into empty store
+                mergeServerData(serverRaw);
+
+                // then check persisted local copy and merge preserved items if applicable
+                try {
+                  const persistedRaw = localStorage.getItem('docsStore');
+                  const policy = localStorage.getItem('docsStorePolicy');
+                  const persistedAt = parseInt(localStorage.getItem('docsStorePersistedAt') || '0', 10) || 0;
+                  const now = Date.now();
+                  const RECENT_MS = 5 * 60 * 1000; // 5 minutes
+
+                  if (persistedRaw) {
+                    let parsed = null;
+                    try { parsed = JSON.parse(persistedRaw); } catch (e) { parsed = null; }
+                    let keep = false;
+
+                    // respect explicit opt-in
+                    if (policy === 'use_local') keep = true;
+
+                    if (!keep && parsed && typeof parsed === 'object') {
+                      // If persisted copy contains any local-pending items (created locally, no server id or flagged),
+                      // keep them regardless of timestamp so the user's recent uploads are not lost after reload.
+                      for (const k of Object.keys(parsed)) {
+                        const arr = parsed[k];
+                        if (!Array.isArray(arr)) continue;
+                        for (const it of arr) {
+                          if (!it) continue;
+                          // marker set when we created pending items in UI
+                          if (it._localPending === true) { keep = true; break; }
+                          // or id looks like a local temp id
+                          if (typeof it.id === 'string' && it.id.indexOf('local-') === 0) { keep = true; break; }
+                          // or no server id but a temp object was stored (reasonable to keep briefly)
+                          if (!it.id && it._tempId) { keep = true; break; }
+                        }
+                        if (keep) break;
+                      }
+                      // If still not decided to keep, fall back to previous heuristic:
+                      // keep only when persisted copy contains server-backed items AND is recent.
+                      if (!keep) {
+                        for (const k of Object.keys(parsed)) {
+                          const arr = parsed[k];
+                          if (Array.isArray(arr) && arr.some(it => it && ((it.created && (it.created.id || it.created.path || it.created.url)) || (typeof it.id === 'number' && it.id > 0)))) {
+                            // only keep server-backed persisted copy if it's very recent (safety net)
+                            if ((now - persistedAt) <= RECENT_MS) { keep = true; }
+                            break;
+                          }
+                        }
+                      }
+                    }
+
+                    if (keep && parsed) {
+                      // Merge preserved items into docsStore; preserve _localPending and _category
+                      Object.keys(parsed).forEach(k => {
+                        if (!Array.isArray(parsed[k]) || !window.docsStore.hasOwnProperty(k)) return;
+                        parsed[k].forEach(it => {
+                          if (!it) return;
+                          it._category = it._category || k;
+                          // If server already has this id, enrich server item; otherwise keep the local pending item.
+                          const hasOnServer = Object.values(window.docsStore).some(list => list.some(x => x && it.id && x.id === it.id));
+                          if (!hasOnServer) {
+                            window.docsStore[k] = window.docsStore[k] || [];
+                            const dup = window.docsStore[k].some(x => (it.id && x.id === it.id) || (x.title === it.title && !it.id));
+                            if (!dup) window.docsStore[k].unshift(it);
+                          } else {
+                            if (it.id) {
+                              Object.keys(window.docsStore).forEach(cat => {
+                                const idx = (window.docsStore[cat] || []).findIndex(x => x && x.id === it.id);
+                                if (idx > -1) window.docsStore[cat][idx] = Object.assign({}, window.docsStore[cat][idx], it);
+                              });
+                            }
+                          }
+                        });
+                      });
+                      console.info('docsStore merged with local persisted copy (opt-in or pending items kept).');
+                    } else {
+                      // If we decided NOT to keep the persisted copy, remove only if it's obviously stale/invalid.
+                      // This avoids accidental deletion of user-pending uploads.
+                      try {
+                        // remove only if parsed is falsy or not an object (defensive)
+                        if (!parsed || typeof parsed !== 'object') {
+                          localStorage.removeItem('docsStore');
+                          localStorage.removeItem('docsStorePersistedAt');
+                        }
+                      } catch (e) { /* ignore */ }
+                    }
+                  }
+                } catch (e) {
+                  console.debug('merge persisted docsStore failed', e);
+                }
+
+                // finally render the current active category
+                try { renderDocs(activeCat); } catch (e) { console.debug('initial renderDocs failed', e); }
+              }
+              // helper: build a minimal serializable copy for storage
+              function sanitizeForStorage(store) {
+                const cats = ['proces-verbaux', 'attestations', 'bordereaux', 'annonces'];
+                const out = {};
+                cats.forEach(cat => {
+                  out[cat] = (store[cat] || []).map(it => {
+                    if (!it || typeof it !== 'object') return null;
+                    // keep only minimal fields (id, title, desc, url, _tempId, _category, _localPending, created id/path/url)
+                    const createdRef = it.created && typeof it.created === 'object' ? {
+                      id: it.created.id || null,
+                      path: it.created.path || null,
+                      url: it.created.url || null
+                    } : undefined;
+                    return {
+                      id: it.id || null,
+                      title: it.title || null,
+                      desc: it.desc || null,
+                      url: it.url || null,
+                      _tempId: it._tempId || null,
+                      _category: it._category || cat,
+                      _localPending: !!it._localPending,
+                      created: createdRef
+                    };
+                  }).filter(Boolean);
+                });
+                return out;
+              }
+
+              // single, canonical persist helper (used everywhere)
+              function persistIfAllowed() {
+                try {
+                  const policy = localStorage.getItem('docsStorePolicy') || window._docsStorePolicy;
+                  // opt-in: persist full sanitized store
+                  if (policy === 'use_local') {
+                    localStorage.setItem('docsStore', JSON.stringify(sanitizeForStorage(window.docsStore)));
+                    localStorage.setItem('docsStorePersistedAt', String(Date.now()));
+                    window._docsStoreHadPersisted = true;
+                    return;
+                  }
+                  // otherwise persist only local pending items (safety-net)
+                  const sanitized = sanitizeForStorage(window.docsStore);
+                  const hasPending = Object.keys(sanitized).some(k => Array.isArray(sanitized[k]) && sanitized[k].length > 0);
+                  if (hasPending || window._docsStoreHadPersisted) {
+                    localStorage.setItem('docsStore', JSON.stringify(sanitized));
+                    localStorage.setItem('docsStorePersistedAt', String(Date.now()));
+                    window._docsStoreHadPersisted = true;
+                  } else {
+                    // nothing to keep
+                    try { localStorage.removeItem('docsStore'); localStorage.removeItem('docsStorePersistedAt'); } catch (e) { /* ignore */ }
+                  }
+                } catch (e) { console.debug('persistIfAllowed failed', e); }
+              }
+
+              // expose single helper
+              window.persistIfAllowed = persistIfAllowed;
+              // expose init function and call it on DOMContentLoaded below (instead of immediate render)
+              window.initDocs = initDocs;
+            })();
+
+            /* Removed duplicate persisted-merge block.
+                The docsStore is initialized above (loadServerDocs + opt-in policy).
+                Keeping this duplicate caused re-insertion of mock/old data after reload. */
+
+            const catButtons = document.querySelectorAll('.doc-cat-btn');
+            const docsItems = document.getElementById('docsItems');
+            const docsEmpty = document.getElementById('docsEmpty');
+            const docsListTitle = document.getElementById('docsListTitle');
+            const searchInput = document.getElementById('docSearch');
+            const btnSaveDocs = document.getElementById('btnSaveDocs');
+            const docsSaveMsg = document.getElementById('docsSaveMsg');
+
+            let activeCat = 'proces-verbaux';
+
+            function esc(s) { return String(s === null || s === undefined ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+
+            // Remplace l'ancienne renderDocs(...) par ce bloc (utilise le helper local `esc`)
+            function renderDocs(category, filter) {
+              activeCat = category || activeCat;
+              // update ARIA pressed states
+              catButtons.forEach(b => {
+                const pressed = b.dataset.cat === activeCat ? 'true' : 'false';
+                b.setAttribute('aria-pressed', pressed);
+              });
+              docsListTitle.textContent = 'Documents — ' + {
+                'proces-verbaux': 'Procès-verbaux',
+                'attestations': 'Attestations',
+                'bordereaux': 'Bordereaux',
+                'annonces': 'Annonces'
+              }[activeCat] || activeCat;
+
+              const arr = (docsStore[activeCat] || []).slice();
+              const q = (filter || (searchInput && searchInput.value) || '').trim().toLowerCase();
+              const filtered = q ? arr.filter(d => (d.title + ' ' + (d.desc || '')).toLowerCase().includes(q)) : arr;
+
+              docsItems.innerHTML = '';
+              if (filtered.length === 0) {
+                docsEmpty.classList.remove('hidden');
+                return;
+              } else {
+                docsEmpty.classList.add('hidden');
+              }
+
+              // group by year
+              const groups = {};
+              for (const d of filtered) {
+                // determine year: prefer explicit d.year, else find 20xx in title/id/desc, else "Sans année"
+                let year = null;
+                if (d.year) year = String(d.year);
+                else {
+                  const hay = (d.title || '') + ' ' + (d.id || '') + ' ' + (d.desc || '');
+                  const m = hay.match(/(20\d{2})/);
+                  year = m ? m[1] : 'Sans année';
+                }
+                groups[year] = groups[year] || [];
+                groups[year].push(d);
+              }
+
+              // sort years: numeric desc, keep 'Sans année' last
+              const years = Object.keys(groups).sort((a, b) => {
+                if (a === 'Sans année') return 1;
+                if (b === 'Sans année') return -1;
+                return Number(b) - Number(a);
+              });
+
+              // render groups
+              for (const y of years) {
+                const items = groups[y];
+                const groupEl = document.createElement('div');
+                groupEl.className = 'docs-year-group';
+                const header = document.createElement('div');
+                header.className = 'docs-year-header';
+                header.innerHTML = `<div class="docs-year-title">${esc(y === 'Sans année' ? '(Sans année)' : String(y))}</div>
+                        <div class="docs-year-count">${items.length} document${items.length > 1 ? 's' : ''}</div>`;
+                groupEl.appendChild(header);
+
+                const cards = document.createElement('div');
+                cards.className = 'docs-doc-cards';
+
+                for (const d of items) {
+                  const card = document.createElement('div');
+                  card.className = 'docs-doc-card';
+                  // expose id and category on the card for delegation & accessibility
+                  if (d.id) card.dataset.id = d.id;
+                  if (activeCat) card.dataset.category = activeCat;
+                  const left = document.createElement('div');
+                  left.className = 'left';
+                  const titleText = esc(d.title || d.original_name || d.filename || '(sans titre)');
+                  const metaText = esc(d.desc || (d.id ? 'id: ' + d.id : ''));
+                  left.innerHTML = `<span class="title">${titleText}</span>
+                        <span class="meta">${metaText}</span>`;
+
+                  // actions container
+                  const actions = document.createElement('div');
+                  actions.className = 'actions docs-actions';
+
+                  // helper to build icon buttons (uses template literals for embedded SVG)
+                  function createAction(tag, cls, innerHTML, attrs = {}) {
+                    const el = document.createElement(tag);
+                    el.className = cls + ' doc-action';
+                    el.innerHTML = innerHTML;
+                    Object.keys(attrs).forEach(k => el.setAttribute(k, attrs[k]));
+                    return el;
+                  }
+
+                  // Open button (anchor) - shows icon + label
+                  const openSvg = `<svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                      <path d="M14 3h7v7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M10 14L21 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M21 21H3V3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg><span>Ouvrir</span>`;
+                  const openBtn = createAction('a', 'open-btn', openSvg, { href: (d.url || '#'), target: '_blank', rel: 'noopener noreferrer', title: 'Ouvrir' });
+                  openBtn.addEventListener('click', (ev) => {
+                    // pas d'URL publique
+                    if (!d.url || d.url === '#') {
+                      ev.preventDefault();
+                      if (d.id) {
+                        const downloadUrl = '/api/documents/' + encodeURIComponent(d.id) + '/download';
+                        window.open(downloadUrl, '_blank');
+                        return;
+                      }
+                      alert('Aucune URL disponible pour ce document.');
+                      return;
+                    }
+
+                    const urlStr = String(d.url);
+
+                    // 1) Si blob: -> forcer téléchargement via <a download>
+                    if (urlStr.startsWith('blob:')) {
+                      ev.preventDefault();
+                      try {
+                        const a = document.createElement('a');
+                        a.href = d.url;
+                        // utiliser le titre comme nom de fichier si possible
+                        const filename = (d.title || d.filename || 'document').replace(/[\s/\\]+/g, '_');
+                        a.download = filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        // révoquer l'objectURL après un délai pour laisser le navigateur finir
+                        setTimeout(() => {
+                          try { URL.revokeObjectURL(d.url); } catch (e) { /* ignore */ }
+                        }, 2000);
+                      } catch (err) {
+                        console.error('open blob failed', err);
+                        alert('Impossible d\'ouvrir/télécharger le fichier local. Essayez d\'enregistrer le fichier ou de réessayer.');
+                      }
+                      return;
+                    }
+
+                    // 2) Pour http/https normaux : laisser l'<a> agir (il a rel="noopener noreferrer")
+                    // Pas d'intervention ici.
+                  });
+
+                  // Classify button
+                  const classifySvg = `<svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                      <path d="M3 7h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M3 12h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M3 17h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg><span>Classer</span>`;
+                  const classifyBtn = createAction('button', 'btn-doc-classify', classifySvg);
+                  classifyBtn.dataset.id = d.id || '';
+                  classifyBtn.setAttribute('title', 'Classer le document');
+                  classifyBtn.setAttribute('aria-label', 'Classer le document');
+
+                  // Delete button (danger)
+                  const delSvg = `<svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                      <path d="M3 6h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M10 11v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M14 11v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg><span>Supprimer</span>`;
+                  const delBtn = createAction('button', 'btn-doc-delete', delSvg);
+                  delBtn.classList.add('danger');
+                  delBtn.setAttribute('title', 'Supprimer le document');
+                  delBtn.setAttribute('aria-label', 'Supprimer le document');
+                  delBtn.addEventListener('click', async () => {
+                    if (!confirm('Supprimer le document "' + (d.title || d.id || '') + '" ?')) return;
+                    delBtn.disabled = true;
+                    const token = localStorage.getItem('token') || '';
+                    const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+                    const tryEndpoints = [
+                      `/api/documents/${encodeURIComponent(d.id)}`,
+                      `/api/documents/${encodeURIComponent(d.id)}/delete`,
+                      `/api/documents/${encodeURIComponent(d.id)}`
+                    ];
+                    let ok = false;
+                    for (const urlTry of tryEndpoints) {
+                      try {
+                        const res = await fetch(urlTry, { method: 'DELETE', headers });
+                        if (res.status === 204 || res.status === 200) { ok = true; break; }
+                        if (res.status === 404) continue;
+                      } catch (err) {
+                        console.debug('delete attempt failed', err);
+                      }
+                    }
+                    delBtn.disabled = false;
+                    if (ok) {
+                      // suppression confirmée côté serveur -> retirer localement et nettoyer la copie persistée
+                      docsStore[activeCat] = (docsStore[activeCat] || []).filter(x => x.id !== d.id);
+                      try { localStorage.removeItem('docsStore'); localStorage.removeItem('docsStorePersistedAt'); } catch (e) { /* ignore */ }
+                      renderDocs(activeCat, q);
+                      return;
+                    }
+                    // fallback: suppression locale + persistance limitée (item marqué localPending)
+                    docsStore[activeCat] = (docsStore[activeCat] || []).filter(x => x.id !== d.id);
+                    try { if (typeof window.persistIfAllowed === 'function') window.persistIfAllowed(); } catch (e) { console.debug('persist after local delete failed', e); }
+                    renderDocs(activeCat, q);
+                    alert('Suppression appliquée localement (offline). Si le document existe encore sur le serveur, il réapparaîtra après synchronisation ou rechargement si le serveur n\'a pas été mis à jour. Utilisez la fonction "Enregistrer" / synchronisation côté serveur si disponible.');
+                  });
+
+                  actions.appendChild(openBtn);
+                  actions.appendChild(classifyBtn);
+                  actions.appendChild(delBtn);
+
+                  card.appendChild(left);
+                  card.appendChild(actions);
+                  cards.appendChild(card);
+                }
+
+                groupEl.appendChild(cards);
+                docsItems.appendChild(groupEl);
+              }
+              try { if (typeof window.attachYearToggleHandlers === 'function') { window.attachYearToggleHandlers(); } } catch (e) { console.debug('attachYearToggleHandlers call failed', e); }
+            }
+
+            // attach category handlers
+            catButtons.forEach(b => {
+              b.addEventListener('click', () => renderDocs(b.dataset.cat));
+            });
+
+            // search
+            if (searchInput) {
+              searchInput.addEventListener('input', () => renderDocs(activeCat, searchInput.value));
+            }
+
+            // upload handling (mock)
+            const uploadSubmit = document.getElementById('uploadSubmit');
+            const uploadReset = document.getElementById('uploadReset');
+            const uploadFile = document.getElementById('uploadFile');
+            const uploadTitle = document.getElementById('uploadTitle');
+            const uploadDesc = document.getElementById('uploadDesc');
+            const uploadCategory = document.getElementById('uploadCategory');
+            const uploadMsg = document.getElementById('uploadMsg');
+
+            function resetUploadForm() {
+              if (uploadFile) uploadFile.value = '';
+              if (uploadTitle) uploadTitle.value = '';
+              if (uploadDesc) uploadDesc.value = '';
+              if (uploadCategory) uploadCategory.value = 'proces-verbaux';
+              if (uploadMsg) uploadMsg.textContent = '';
+            }
+
+            if (uploadReset) uploadReset.addEventListener('click', resetUploadForm);
+            if (uploadSubmit) uploadSubmit.addEventListener('click', async () => {
+              const file = uploadFile.files && uploadFile.files[0];
+              const title = uploadTitle.value.trim();
+              const desc = uploadDesc.value.trim();
+              const cat = uploadCategory.value;
+              if (!file || !title) { uploadMsg.textContent = 'Fichier et titre requis.'; return; }
+              uploadMsg.textContent = 'Téléversement en cours...';
+
+              try {
+                const fd = new FormData();
+                fd.append('file', file);
+                fd.append('title', title);
+                if (desc) fd.append('desc', desc);
+                if (cat) fd.append('category', cat);
+
+                const token = localStorage.getItem('token') || '';
+                const headers = token ? { 'Authorization': 'Bearer ' + token } : undefined;
+
+                const res = await fetch('/api/documents/upload', { method: 'POST', body: fd, headers });
+                if (!res.ok) {
+                  const txt = await res.text().catch(() => '');
+                  throw new Error('Status ' + res.status + (txt ? ' ' + txt : ''));
+                }
+
+                // normalize the response similarly to uploadFileToServer
+                const createdBody = await res.json().catch(() => null);
+                const doc = createdBody && createdBody.document ? createdBody.document : (createdBody || null);
+
+                // If server returned a document object, insert it into the UI store so later saveDocs / renderDocs see it
+                // create a tempId to allow recovery of the original File later if needed
+                const tempId = 'local-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+                window._pendingFiles = window._pendingFiles || {};
+                try { window._pendingFiles[tempId] = file; } catch (e) { /* ignore */ }
+
+                if (doc) {
+                  // Build a display item for docsStore compatible with renderDocs
+                  const item = {
+                    // prefer server id if present
+                    id: doc.id || (doc.filename ? ('srv-' + Date.now()) : null),
+                    title: (doc.title || title) + (file ? (' (' + file.name + ')') : ''),
+                    desc: desc || doc.desc || '',
+                    // prefer public url if server provided, else construct from path
+                    url: doc.url || doc.path || (doc.filename ? ('/uploads/documents/' + doc.filename) : '#'),
+                    // attach server-created object and tempId so saveDocs can skip re-upload
+                    created: doc,
+                    _tempId: tempId,
+                    _category: cat,
+                    _localPending: true
+                  };
+                  if (!docsStore[cat]) docsStore[cat] = [];
+                  docsStore[cat].unshift(item);
+
+                  // Persist the UI copy temporarily so the item survives a reload while server state propagates.
+                  // Note: remove or guard this in production if you don't want local persistence.
+                  try {
+                    if (typeof window.persistIfAllowed === 'function') window.persistIfAllowed();
+                  } catch (e) { console.debug('persist docsStore failed', e); }
+                } else {
+                  // fallback behavior (shouldn't happen if server returns document)
+                  console.warn('upload: server returned unexpected body', createdBody);
+                  // optional: create a local blob url so file appears in UI (less ideal)
+                  let fileUrl = '#';
+                  try { fileUrl = URL.createObjectURL(file); } catch (e) { fileUrl = '#'; }
+                  const tempIdFallback = 'local-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+                  window._pendingFiles = window._pendingFiles || {};
+                  try { window._pendingFiles[tempIdFallback] = file; } catch (e) { /* ignore */ }
+                  const item = { id: 'local-' + Date.now(), title: title + ' (' + file.name + ')', desc, url: fileUrl, _tempId: tempIdFallback, _category: cat, _localPending: true };
+                  if (!docsStore[cat]) docsStore[cat] = [];
+                  docsStore[cat].unshift(item);
+
+                  // persist locally so the item remains visible after reload (temporary safety net)
+                  // Also set persisted timestamp.
+                  try {
+                    if (typeof window.persistIfAllowed === 'function') window.persistIfAllowed();
+                  } catch (e) { console.debug('persist docsStore failed', e); }
+                }
+
+                uploadMsg.textContent = 'Téléversé avec succès.';
+                resetUploadForm();
+                if (cat === activeCat) renderDocs(activeCat);
+              } catch (err) {
+                console.error('upload failed', err);
+                uploadMsg.textContent = 'Erreur lors du téléversement: ' + (err && err.message ? err.message : 'erreur');
+              }
+            });
+
+            // top "Téléverser" quick button
+            const btnUploadDoc = document.getElementById('btnUploadDoc');
+            if (btnUploadDoc) {
+              btnUploadDoc.addEventListener('click', () => {
+                // scroll to file input
+                if (uploadFile) {
+                  uploadFile.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  uploadFile.focus();
+                }
+              });
+            }
+
+            // Save/persist documents
+            // Remplacer la fonction saveDocs existante par celle-ci
+            // --- Remplacer la fonction saveDocs existante par celle-ci ---
+            /* Replace the existing saveDocs function with this code */
+            async function saveDocs(event) {
+              if (event && typeof event.preventDefault === 'function') event.preventDefault();
+
+              const statusEl = document.getElementById('docsSaveMsg') || null;
+              function setStatus(txt) { try { if (statusEl) statusEl.textContent = txt; } catch (e) { } }
+
+              // collect payload (same heuristics as before)
+              let payload = null;
+              try {
+                if (typeof getPendingDocsPayload === 'function') {
+                  payload = await getPendingDocsPayload();
+                }
+              } catch (e) { console.debug('getPendingDocsPayload failed', e); }
+              payload = payload || window._pendingGroupedDocs || window.bulkPayload || window.pendingDocsPayload || window.pendingDocs || window.documentsPayload || window.docsStore || null;
+
+              if (!payload) {
+                // last-resort scan
+                try {
+                  const keys = Object.getOwnPropertyNames(window);
+                  for (const k of keys) {
+                    try {
+                      const v = window[k];
+                      if (v && typeof v === 'object' && Object.prototype.hasOwnProperty.call(v, 'proces-verbaux')) {
+                        payload = v;
+                        console.debug('saveDocs: payload auto-detected in window.' + k);
+                        break;
+                      }
+                    } catch (e) { /* ignore */ }
+                  }
+                } catch (e) { console.debug('payload scan failed', e); }
+              }
+
+              if (!payload) {
+                console.error('saveDocs: payload introuvable');
+                alert('Données documents introuvables. Vérifie la console pour diagnostic.');
+                return;
+              }
+
+              const typeMap = {
+                'proces-verbaux': 'pv',
+                'bordereaux': 'courrier',
+                'attestations': 'autre',
+                'annonces': 'autre'
+              };
+              const defaultYear = new Date().getFullYear();
+
+              // helper: normalize various upload responses into { id?, path?, url?, raw: original }
+              function normalizeUploadResult(created) {
+                if (!created) return null;
+                // If wrapper { success: true, document: {...} }
+                if (created.success && created.document && typeof created.document === 'object') created = created.document;
+                if (created.document && typeof created.document === 'object') created = created.document;
+
+                const out = { raw: created };
+                if (typeof created.id !== 'undefined' && created.id !== null) out.id = created.id;
+                if (typeof created.path === 'string' && created.path) out.path = created.path;
+                if (typeof created.url === 'string' && created.url) out.url = created.url;
+                // try to build path from filename if present
+                if (!out.path && created.filename) out.path = ('/uploads/documents/' + created.filename);
+                // sometimes server returns storedName/original_name
+                if (!out.path && created.storedName) out.path = ('/uploads/documents/' + created.storedName);
+                return (out.id || out.path || out.url) ? out : null;
+              }
+
+              // helper: try recover File from window._pendingFiles using various heuristics
+              function getFileFromPending(it) {
+                try {
+                  // explicit temp ids on item
+                  const candidates = [it._tempId, it.tempId, it._temp_id];
+                  if (it.created && it.created._tempId) candidates.push(it.created._tempId);
+                  for (const t of candidates) {
+                    if (t && window._pendingFiles && window._pendingFiles[t]) return window._pendingFiles[t];
+                  }
+                  // if id looks like local-temp, try it.id
+                  if (typeof it.id === 'string' && it.id.indexOf('local-') === 0 && window._pendingFiles && window._pendingFiles[it.id]) return window._pendingFiles[it.id];
+
+                  // heuristic: match by filename substring (title inferred)
+                  const desiredName = ((it.title && (it.title.match(/\(([^\)]+)\)\s*$/) ? it.title.match(/\(([^\)]+)\)\s*$/)[1] : null)) || (it.filename || ''));
+                  if (desiredName && window._pendingFiles) {
+                    const dn = desiredName.toLowerCase();
+                    for (const k of Object.keys(window._pendingFiles)) {
+                      try {
+                        const f = window._pendingFiles[k];
+                        if (f && f.name && f.name.toLowerCase().includes(dn)) return f;
+                      } catch (e) { /* ignore */ }
+                    }
+                  }
+
+                  // last: try any pending file if there's only one
+                  if (window._pendingFiles) {
+                    const keys = Object.keys(window._pendingFiles || {});
+                    if (keys.length === 1) return window._pendingFiles[keys[0]];
+                  }
+                } catch (e) { console.debug('getFileFromPending failed', e); }
+                return null;
+              }
+
+              // Build ops and attempt uploads where needed
+              const ops = [];
+              const skipped = []; // items skipped because file missing or upload failed
+              let processedCount = 0;
+              try {
+                // iterate groups
+                for (const [groupName, items] of Object.entries(payload)) {
+                  if (!Array.isArray(items) || items.length === 0) continue;
+                  const mappedType = typeMap[groupName] || 'autre';
+
+                  // iterate items, but update status between items to avoid long UI freeze
+                  for (const it of items) {
+                    processedCount++;
+                    setStatus(`Préparation ${processedCount} — traitement de ${it && (it.title || it.filename || it.id || '(sans titre)')}`);
+                    // if already server-created reference present
+                    if (it && (it.server_id || (it.created && (it.created.id || it.created.path || it.created.url)))) {
+                      const created = it.created || { id: it.server_id };
+                      if (created.id) ops.push({ id: created.id, type_slug: mappedType, year: it.year || defaultYear });
+                      else if (created.path) ops.push({ path: created.path, type_slug: mappedType, year: it.year || defaultYear });
+                      else if (created.url) ops.push({ url: created.url, type_slug: mappedType, year: it.year || defaultYear });
+                      continue;
+                    }
+
+                    const url = it && it.url ? String(it.url).trim() : '';
+                    if (url && url.startsWith('blob:')) {
+                      // Prefer to recover the File from memory (window._pendingFiles)
+                      const file = getFileFromPending(it);
+                      if (!file) {
+                        // cannot recover automatically; do not open file picker programmatically.
+                        skipped.push({ reason: 'missing_in_memory', item: it });
+                        console.warn('saveDocs: missing in-memory File for item', it);
+                        continue;
+                      }
+
+                      // upload it
+                      setStatus(`Upload de "${file.name}"...`);
+                      try {
+                        const createdRaw = await uploadFileToServer(file);
+                        const normalized = normalizeUploadResult(createdRaw);
+                        if (!normalized) {
+                          // server didn't return usable reference
+                          console.warn('saveDocs: upload returned no id/path/url for recovered file', createdRaw);
+                          skipped.push({ reason: 'no_server_ref', item: it, uploadResult: createdRaw });
+                          continue;
+                        }
+                        // push op
+                        if (normalized.id) ops.push({ id: normalized.id, type_slug: mappedType, year: it.year || defaultYear });
+                        else if (normalized.path) ops.push({ path: normalized.path, type_slug: mappedType, year: it.year || defaultYear });
+                        else if (normalized.url) ops.push({ url: normalized.url, type_slug: mappedType, year: it.year || defaultYear });
+                        // store created info on item for later reference (non-mandatory)
+                        try { it.created = normalized.raw; } catch (e) { }
+                        continue;
+                      } catch (uerr) {
+                        console.error('saveDocs: upload failed for recovered file', uerr);
+                        skipped.push({ reason: 'upload_failed', item: it, error: String(uerr) });
+                        continue;
+                      }
+                    } else if (url) {
+                      // non-blob URL (server or external) -> use directly
+                      if (url.startsWith(window.location.origin)) {
+                        ops.push({ url: url.slice(window.location.origin.length), type_slug: mappedType, year: it.year || defaultYear });
+                      } else {
+                        ops.push({ url: url, type_slug: mappedType, year: it.year || defaultYear });
+                      }
+                      continue;
+                    } else {
+                      // no url and no server ref -> skip
+                      skipped.push({ reason: 'no_reference', item: it });
+                      continue;
+                    }
+                  } // end for items
+                } // end for groups
+              } catch (err) {
+                console.error('saveDocs: erreur lors du parcours payload', err);
+                alert('Erreur interne lors de la préparation des fichiers. Voir console.');
+                setStatus('');
+                return;
+              }
+
+              // If all items skipped -> inform user
+              if (!ops.length) {
+                let msg = 'Aucune opération prête à l\'envoi.';
+                if (skipped.length) {
+                  msg += ' ' + skipped.length + ' élément(s) non traités (fichiers manquants ou erreurs).';
+                  msg += '\nPour finaliser : ré-uploadez les fichiers via "Importer un document" et relancez "Enregistrer".';
+                }
+                alert(msg);
+                setStatus('');
+                return;
+              }
+
+              // Send bulk for available ops
+              setStatus(`Envoi bulk de ${ops.length} opération(s)...`);
+              const bulkSender = (typeof sendBulkOperationsSafe === 'function') ? sendBulkOperationsSafe
+                : ((typeof sendBulkOperations === 'function') ? sendBulkOperations : null);
+              if (!bulkSender) {
+                console.error('saveDocs: aucun bulkSender disponible');
+                alert('Envoi bulk non disponible. Recharge la page.');
+                setStatus('');
+                return;
+              }
+
+              try {
+                const res = await bulkSender(ops, { failOnInvalid: true });
+                console.info('saveDocs: bulk result', res);
+                let userMsg = 'Documents importés avec succès.';
+                if (skipped.length) {
+                  userMsg += ` ${skipped.length} élément(s) ont été ignorés car le fichier n'était plus disponible en mémoire ou l'upload a échoué. Ré-uploadez-les manuellement puis relancez "Enregistrer".`;
+                }
+                alert(userMsg);
+                // bulk succeeded — MAINTENANT on ne vide pas le localStorage tant que /api/documents ne contient pas les documents enregistrés
+                try { if (typeof window.persistIfAllowed === 'function') window.persistIfAllowed(); } catch (e) { }
+                try { if (typeof renderDocs === 'function') renderDocs(activeCat); } catch (e) { console.debug('renderDocs after bulk failed', e); }
+              } catch (err) {
+                console.error('saveDocs: bulk failed', err);
+                alert('Échec du bulk: ' + (err && err.message ? err.message : String(err)));
+              } finally {
+                setStatus('');
+              }
+            }
+
+            if (btnSaveDocs) {
+              btnSaveDocs.addEventListener('click', (ev) => {
+                ev.preventDefault();
+                // Make handler lightweight: schedule heavy work so browser keeps UI responsive.
+                btnSaveDocs.disabled = true;
+                setTimeout(async () => {
+                  try {
+                    await saveDocs();
+                  } catch (e) {
+                    console.error('saveDocs wrapper error', e);
+                  } finally {
+                    btnSaveDocs.disabled = false;
+                  }
+                }, 50);
+              });
+            } else {
+              console.debug('btnSaveDocs not found - save disabled');
+            }
+            // expose renderDocs so external scripts (app.js) can trigger document searches
+            window.renderDocs = renderDocs;
+            // optional: expose the active category
+            window.getActiveDocsCategory = function () { return typeof activeCat !== 'undefined' ? activeCat : null; };
+
+            document.addEventListener('DOMContentLoaded', () => {
+              if (typeof window.initDocs === 'function') {
+                try { window.initDocs(); } catch (e) { console.debug('initDocs failed', e); renderDocs(activeCat); }
+              } else {
+                renderDocs(activeCat);
+              }
+            });
+            /* ---- Classify modal & delegated handler (UI improvement A+B) ---- */
+            (function () {
+              // create modal HTML (reuses existing .modal/.modal-content styles)
+              const modalHtml = `
+                <div id="classifyModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="classifyTitle" >
+                  <div class="modal-content" role="document" style="max-width:420px;">
+                    <h3 id="classifyTitle">Classer le document</h3>
+                    <form id="classifyForm" style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
+                      <label>Catégorie
+                        <select id="classifyCategory" class="edt-select">
+                          <option value="proces-verbaux">Procès-verbaux</option>
+                          <option value="attestations">Attestations</option>
+                          <option value="bordereaux">Bordereaux</option>
+                          <option value="annonces">Annonces</option>
+                        </select>
+                      </label>
+                      <label>Nouveau titre (optionnel)
+                        <input id="classifyNewTitle" class="edt-input" placeholder="Titre (laisser vide pour conserver)" />
+                      </label>
+                      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:6px;">
+                        <button id="classifyConfirm" type="button" class="edt-btn">Déplacer</button>
+                        <button id="classifyCancel" type="button" class="edt-btn" style="background:#f1f5f9;color:#0f1722">Annuler</button>
+                      </div>
+                      <div id="classifyMsg" class="muted" style="margin-top:6px;"></div>
+                    </form>
+                  </div>
+                </div>`;
+
+              // append modal to body
+              try {
+                const wrapper = document.createElement('div');
+                wrapper.innerHTML = modalHtml;
+                document.body.appendChild(wrapper.firstElementChild);
+              } catch (e) { console.debug('append classify modal failed', e); }
+
+              // modal elements
+              const classifyModal = document.getElementById('classifyModal');
+              const classifyCategory = document.getElementById('classifyCategory');
+              const classifyNewTitle = document.getElementById('classifyNewTitle');
+              const classifyConfirm = document.getElementById('classifyConfirm');
+              const classifyCancel = document.getElementById('classifyCancel');
+              const classifyMsg = document.getElementById('classifyMsg');
+
+              let currentMove = { id: null, from: null, item: null };
+
+              function openClassifyModal(id, fromCat) {
+                currentMove.id = id;
+                currentMove.from = fromCat;
+                // find item object
+                const items = (docsStore[fromCat] || []);
+                const it = items.find(x => x.id === id) || null;
+                currentMove.item = it;
+                if (!classifyModal) return;
+                classifyMsg.textContent = '';
+                classifyCategory.value = fromCat || 'proces-verbaux';
+                classifyNewTitle.value = it && it.title ? it.title : '';
+                classifyModal.classList.remove('hidden');
+                document.querySelector('.page')?.classList.add('locked');
+                // focus first control
+                setTimeout(() => { classifyCategory?.focus(); }, 60);
+              }
+
+              function closeClassifyModal() {
+                if (classifyModal) classifyModal.classList.add('hidden');
+                document.querySelector('.page')?.classList.remove('locked');
+                currentMove = { id: null, from: null, item: null };
+              }
+
+              // delegated click handler for classify buttons
+              document.addEventListener('click', (e) => {
+                const btn = e.target.closest('.btn-doc-classify');
+                if (!btn) return;
+                e.preventDefault();
+                // find nearest card for dataset
+                const card = btn.closest('.docs-doc-card');
+                const id = btn.dataset.id || (card && card.dataset.id);
+                const from = (card && card.dataset.category) || activeCat;
+                if (!id) { alert('Identifiant manquant pour ce document.'); return; }
+                openClassifyModal(id, from);
+              });
+
+              // cancel
+              if (classifyCancel) classifyCancel.addEventListener('click', (e) => { e.preventDefault(); closeClassifyModal(); });
+
+              // confirm move
+              if (classifyConfirm) classifyConfirm.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (!currentMove.id || !currentMove.from) { classifyMsg.textContent = 'Aucun document sélectionné.'; return; }
+                const to = classifyCategory.value;
+                if (!to) { classifyMsg.textContent = 'Choisir une catégorie.'; return; }
+                if (to === currentMove.from) { classifyMsg.textContent = 'La catégorie sélectionnée est la même.'; return; }
+                // perform move
+                try {
+                  const src = docsStore[currentMove.from] || [];
+                  const idx = src.findIndex(x => x.id === currentMove.id);
+                  if (idx === -1) { classifyMsg.textContent = 'Document introuvable.'; return; }
+                  const item = src.splice(idx, 1)[0];
+                  // optional new title
+                  const newTitle = classifyNewTitle.value && classifyNewTitle.value.trim();
+                  if (newTitle) item.title = newTitle;
+                  // ensure destination exists
+                  if (!docsStore[to]) docsStore[to] = [];
+                  docsStore[to].unshift(item);
+                  classifyMsg.textContent = 'Déplacé.';
+                  try { if (typeof window.persistIfAllowed === 'function') window.persistIfAllowed(); } catch (e) { console.debug('persist after classify failed', e); }
+                  // re-render current active category (if affected)
+                  try { renderDocs(activeCat); } catch (err) { console.debug('renderDocs after classify failed', err); }
+                  try { if (typeof window.persistIfAllowed === 'function') window.persistIfAllowed(); } catch (e) { console.debug('persist after classify failed', e); }
+                  // re-render current active category (if affected)
+                  try { renderDocs(activeCat); } catch (err) { console.debug('renderDocs after classify failed', err); }
+                  setTimeout(() => closeClassifyModal(), 650);
+                } catch (err) {
+                  console.error('classify move error', err);
+                  classifyMsg.textContent = 'Erreur pendant le déplacement.';
+                }
+              });
+
+              // allow closing modal with Escape
+              document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && classifyModal && !classifyModal.classList.contains('hidden')) {
+                  closeClassifyModal();
+                }
+              });
+            })();
+          })();
+        </script>
+      </section>
+
+      <section id="panel-legislation" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-legislation">
+        <div class="panel-grid">
+          <div>
+            <h2>Législation</h2>
+
+            <div class="docs-list" id="legislationContainer" style="min-height:120px;">
+
+              <!-- Upload form -->
+              <!-- Upload card (separate) -->
+              <div class="docs-list" id="legislationUploadCard" style="margin-bottom:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                  <strong>Ajouter un document ou un lien</strong>
+                  <div class="muted" style="font-size:0.9rem;">Fichier ou URL</div>
+                </div>
+                <div>
+                  <form id="legForm" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                    <div style="flex-basis:100%;display:flex;gap:12px;align-items:center;">
+                      <label><input type="radio" name="legMode" value="file" checked> Fichier</label>
+                      <label><input type="radio" name="legMode" value="link"> Lien</label>
+                    </div>
+
+                    <div id="legFileGroup" style="display:inline-flex;gap:8px;align-items:center;">
+                      <input id="legUploadFile" name="file" type="file" />
+                    </div>
+
+                    <div id="legLinkGroup" style="display:none;gap:8px;align-items:center;">
+                      <input id="legLink" name="link" type="url" class="edt-input"
+                        placeholder="https://exemple.org/doc.pdf" style="max-width:360px;" />
+                    </div>
+
+                    <input id="legUploadTitle" class="edt-input" placeholder="Titre (optionnel)"
+                      style="max-width:320px;" />
+                    <input id="legUploadDesc" class="edt-input" placeholder="Description (optionnel)"
+                      style="max-width:320px;" />
+                    <button id="legUploadSubmit" class="edt-btn" type="button" style="padding:6px 10px">Ajouter</button>
+                  </form>
+                </div>
+                <div id="legUploadMsg" class="muted" style="margin-top:6px;"></div>
+              </div>
+
+              <!-- Documents list card (separate) -->
+              <div class="docs-list" id="legislationListCard" style="min-height:120px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                  <strong>Documents législatifs</strong>
+                  <div>
+                    <input id="legSearch" placeholder="Rechercher..."
+                      style="padding:6px 8px;border-radius:8px;border:1px solid #eef2f8" />
+                    <button id="btnRefreshLeg" class="edt-btn"
+                      style="padding:6px 10px;font-size:0.9rem;margin-left:8px;">Actualiser</button>
+                  </div>
+                </div>
+
+                <ul id="legItems" aria-live="polite"
+                  style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px;">
+                  <!-- injected items -->
+                </ul>
+
+                <div id="legEmpty" class="muted hidden" style="margin-top:8px;">Aucun document législatif.</div>
+                <div id="legMsg" class="muted" style="margin-top:8px;"></div>
+              </div>
+            </div>
+          </div>
+
+          <aside class="edt-side-panel">
+            <h3>Ressources Législation</h3>
+            <p class="muted">Liens utiles, textes officiels et notices.</p>
+            <!-- Classeur: a folder-like UI that opens to show the legislation list -->
+            <div id="legClasseur" class="classeur" aria-expanded="false">
+              <button id="classeurToggle" class="classeur-cover" aria-controls="legClasseurBody" aria-expanded="false"
+                type="button">
+                <span class="classeur-title">Classeur Législation</span>
+                <span class="classeur-count">0</span>
+              </button>
+              <div id="legClasseurBody" class="classeur-body" aria-hidden="true">
+                <div id="legResourcesList" class="classeur-list" role="list">
+                  <!-- dynamic items injected here -->
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <!-- script spécifique Législation -->
+        <script>
+          (function () {
+            const container = document.getElementById('legItems');
+            const empty = document.getElementById('legEmpty');
+            const msg = document.getElementById('legMsg');
+            const search = document.getElementById('legSearch');
+            const refreshBtn = document.getElementById('btnRefreshLeg');
+            const uploadFile = document.getElementById('legUploadFile');
+            const uploadTitle = document.getElementById('legUploadTitle');
+            const uploadDesc = document.getElementById('legUploadDesc');
+            const uploadSubmit = document.getElementById('legUploadSubmit');
+
+            async function loadData() {
+              msg.textContent = 'Chargement…';
+              try {
+                const token = localStorage.getItem('token') || '';
+                const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+                const res = await fetch('/api/legislation', { headers });
+                if (!res.ok) {
+                  msg.textContent = 'Impossible de charger (fallback local).';
+                  return [];
+                }
+                const data = await res.json().catch(() => null);
+                msg.textContent = '';
+                return Array.isArray(data) ? data : [];
+              } catch (err) {
+                console.debug('legislation fetch error', err);
+                msg.textContent = 'Erreur réseau — utilisez le fallback.';
+                return [];
+              }
+            }
+
+            function esc(s) { return String(s === null || s === undefined ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+            function renderList(items) {
+              container.innerHTML = '';
+              const q = (search && search.value || '').trim().toLowerCase();
+              // first apply text filter (if any), then EXCLUDE link items so the main panel only shows files/documents
+              const matched = q ? (Array.isArray(items) ? items.filter(it => (((it.title || it.originalName || '') + ' ' + (it.desc || '')).toLowerCase().includes(q))) : []) : (Array.isArray(items) ? items.slice() : []);
+              const filtered = matched.filter(it => !(it && (it.kind === 'link' || (!!it.link && String(it.link).trim() !== ''))));
+              if (!filtered || filtered.length === 0) {
+                empty.classList.remove('hidden');
+                return;
+              }
+              empty.classList.add('hidden');
+
+              filtered.forEach(d => {
+                const li = document.createElement('li');
+                li.style.padding = '10px';
+                li.style.borderRadius = '8px';
+                li.style.border = '1px solid #f1f5f9';
+                li.style.background = '#fff';
+                li.style.display = 'flex';
+                li.style.justifyContent = 'space-between';
+                li.style.alignItems = 'center';
+
+                const left = document.createElement('div');
+                left.style.display = 'flex';
+                left.style.flexDirection = 'column';
+                left.innerHTML = '<strong style="font-weight:700;">' + esc(d.title || d.originalName || d.storedName || '') + '</strong>' +
+                  (d.desc ? ('<span class="muted" style="font-size:0.95rem;">' + esc(d.desc) + '</span>') : '');
+
+                const right = document.createElement('div');
+                right.style.display = 'flex';
+                right.style.alignItems = 'center';
+                right.style.gap = '8px';
+
+                const isLink = (d.kind === 'link') || (!!d.link && String(d.link).trim() !== '');
+                // Primary action: open link or download via server route
+                if (isLink) {
+                  const linkUrl = d.link || d.url || null;
+                  const openLink = document.createElement('a');
+                  openLink.className = 'tab-btn';
+                  openLink.textContent = 'Ouvrir le lien';
+                  openLink.href = linkUrl || '#';
+                  openLink.target = '_blank';
+                  openLink.rel = 'noopener noreferrer';
+                  openLink.style.display = 'inline-block';
+                  openLink.addEventListener('click', (ev) => {
+                    if (!linkUrl) { ev.preventDefault(); alert('URL manquante pour cet élément.'); }
+                  });
+                  right.appendChild(openLink);
+
+                  // also provide a server-mediated open (download route which redirects)
+                  if (d.id) {
+                    const viaDownload = document.createElement('a');
+                    viaDownload.className = 'tab-btn';
+                    viaDownload.textContent = 'Ouvrir via /download';
+                    viaDownload.href = '/api/legislation/' + encodeURIComponent(d.id) + '/download';
+                    viaDownload.target = '_blank';
+                    viaDownload.rel = 'noopener noreferrer';
+                    right.appendChild(viaDownload);
+                  }
+                } else {
+                  // file-like: open via server download endpoint if id exists, else fallback to direct url
+                  const downloadHref = d.id ? ('/api/legislation/' + encodeURIComponent(d.id) + '/download') : (d.url || '#');
+                  const open = document.createElement('a');
+                  open.className = 'tab-btn';
+                  open.textContent = 'Ouvrir';
+                  open.href = downloadHref;
+                  open.target = '_blank';
+                  open.rel = 'noopener noreferrer';
+                  open.addEventListener('click', (ev) => {
+                    if ((!d.id && (!d.url || d.url === '#')) || (!downloadHref)) {
+                      ev.preventDefault();
+                      alert('Aucune URL publique pour ce document. ID: ' + (d.id || '(aucun id)'));
+                    }
+                  });
+                  right.appendChild(open);
+                }
+
+                // Supprimer (reuse existing logic)
+                const delBtn = document.createElement('button');
+                delBtn.className = 'tab-btn';
+                delBtn.textContent = 'Supprimer';
+                delBtn.style.marginLeft = '8px';
+                delBtn.addEventListener('click', async (ev) => {
+                  ev.preventDefault();
+                  const id = d.id || d.document_id || d._id;
+                  if (!id) { alert('Impossible : identifiant manquant.'); return; }
+                  if (!confirm('Supprimer ce document législatif ?')) return;
+
+                  delBtn.disabled = true;
+                  const token = localStorage.getItem('token') || '';
+                  const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+
+                  const tryEndpoints = [
+                    `/api/documents/${encodeURIComponent(id)}`,
+                    `/api/legislation/${encodeURIComponent(id)}`
+                  ];
+
+                  let ok = false;
+                  let lastErr = null;
+                  for (const urlTry of tryEndpoints) {
+                    try {
+                      const res = await fetch(urlTry, { method: 'DELETE', headers });
+                      if (res.status === 204 || res.status === 200) { ok = true; break; }
+                      const text = await res.text().catch(() => null);
+                      lastErr = `HTTP ${res.status} ${text || ''}`;
+                      if (res.status === 404) continue;
+                      else break;
+                    } catch (err) {
+                      lastErr = err && err.message ? err.message : String(err);
+                      console.error('DELETE fetch error', err);
+                    }
+                  }
+
+                  delBtn.disabled = false;
+                  if (ok) {
+                    try { refresh(); } catch (e) { console.debug('refresh after delete failed', e); }
+                    return;
+                  }
+                  console.error('delete failed', lastErr);
+                  alert('Échec de la suppression : ' + (lastErr || 'erreur'));
+                });
+                right.appendChild(delBtn);
+
+                li.appendChild(left);
+                li.appendChild(right);
+                container.appendChild(li);
+              });
+            }
+
+            async function refresh() {
+              const data = await loadData();
+              renderList(data || []);
+            }
+            // Render the right-hand "classeur" (folder) containing only links (no files)
+            function renderSidebar(items) {
+              const container = document.getElementById('legResourcesList');
+              const toggleBtn = document.getElementById('classeurToggle');
+              const countEl = document.querySelector('#legClasseur .classeur-count');
+              const body = document.getElementById('legClasseurBody');
+              if (!container) return;
+              container.innerHTML = '';
+
+              // keep only link-kind items
+              const links = (Array.isArray(items) ? items.slice() : []).filter(it => (it && (it.kind === 'link' || (!!it.link && String(it.link).trim() !== ''))));
+
+              // update counter to reflect only links
+              if (countEl) countEl.textContent = String(links.length || 0);
+
+              if (!links.length) {
+                const empty = document.createElement('div');
+                empty.className = 'muted';
+                empty.textContent = '(Aucun lien)';
+                container.appendChild(empty);
+                return;
+              }
+
+              // sort newest first (by uploadedAt if present)
+              links.sort((a, b) => {
+                const ta = a && a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
+                const tb = b && b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;
+                return tb - ta;
+              });
+
+              // populate items with animated reveal (links only)
+              links.forEach((it, i) => {
+                const item = document.createElement('div');
+                item.className = 'classeur-item';
+                const href = it.link || it.url || (it.id ? '/api/legislation/' + encodeURIComponent(it.id) + '/download' : '#');
+                const title = it.title || it.originalName || it.storedName || href;
+                const titleA = document.createElement('a');
+                titleA.className = 'title';
+                titleA.href = href;
+                titleA.target = '_blank';
+                titleA.rel = 'noopener noreferrer';
+                titleA.textContent = title;
+                const meta = document.createElement('div');
+                meta.className = 'muted';
+                if (it.desc && String(it.desc).trim() !== '') {
+                  meta.textContent = it.desc;
+                } else {
+                  meta.style.display = 'none';
+                }
+                item.appendChild(titleA);
+                item.appendChild(meta);
+                container.appendChild(item);
+                // staggered reveal
+                setTimeout(() => item.classList.add('show'), 60 * i);
+              });
+
+              // ensure the body max-height expands to show the list when open
+              function openBody() {
+                const listEl = container;
+                const wrapper = body;
+                if (!wrapper) return;
+                const h = listEl.scrollHeight;
+                wrapper.style.maxHeight = (h + 24) + 'px';
+                wrapper.setAttribute('aria-hidden', 'false');
+                document.getElementById('legClasseur').classList.add('open');
+                if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'true');
+              }
+              function closeBody() {
+                if (!body) return;
+                body.style.maxHeight = '0px';
+                body.setAttribute('aria-hidden', 'true');
+                document.getElementById('legClasseur').classList.remove('open');
+                if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'false');
+              }
+
+              // init toggle behavior
+              if (toggleBtn) {
+                toggleBtn.onclick = (ev) => {
+                  ev.preventDefault();
+                  const expanded = toggleBtn.getAttribute('aria-expanded') === 'true';
+                  if (expanded) closeBody(); else openBody();
+                };
+              }
+            }
+
+            async function refresh() {
+              const data = await loadData();
+              renderList(data || []);
+              // also update the right-hand resources sidebar with link items
+              renderSidebar(data || []);
+            }
+            if (search) {
+              search.addEventListener('input', () => { refresh(); });
+            }
+            if (refreshBtn) refreshBtn.addEventListener('click', refresh);
+
+            // Upload / Link handling (file OR external URL)
+            // Replaces previous simple upload handler to support adding links as well.
+            (function () {
+              const legForm = document.getElementById('legForm');
+              const legFileGroup = document.getElementById('legFileGroup');
+              const legLinkGroup = document.getElementById('legLinkGroup');
+              const legUploadFile = document.getElementById('legUploadFile');
+              const legLink = document.getElementById('legLink');
+              const legUploadTitle = document.getElementById('legUploadTitle');
+              const legUploadDesc = document.getElementById('legUploadDesc');
+              const legUploadSubmit = document.getElementById('legUploadSubmit');
+
+              function updateLegMode() {
+                if (!legForm) return;
+                const mode = (legForm.querySelector('input[name="legMode"]:checked') || {}).value || 'file';
+                if (mode === 'file') {
+                  if (legFileGroup) legFileGroup.style.display = '';
+                  if (legLinkGroup) legLinkGroup.style.display = 'none';
+                } else {
+                  if (legFileGroup) legFileGroup.style.display = 'none';
+                  if (legLinkGroup) legLinkGroup.style.display = '';
+                }
+              }
+
+              if (legForm) {
+                const modeEls = Array.from(legForm.querySelectorAll('input[name="legMode"]'));
+                modeEls.forEach(el => el.addEventListener('change', updateLegMode));
+              }
+              updateLegMode();
+
+              if (legUploadSubmit) {
+                legUploadSubmit.addEventListener('click', async () => {
+                  const mode = (legForm && (legForm.querySelector('input[name="legMode"]:checked') || {}).value) || 'file';
+                  const title = legUploadTitle && legUploadTitle.value ? legUploadTitle.value.trim() : '';
+                  const desc = legUploadDesc && legUploadDesc.value ? legUploadDesc.value.trim() : '';
+
+                  legUploadSubmit.disabled = true;
+                  legUploadSubmit.textContent = 'Ajout en cours…';
+                  try {
+                    const token = localStorage.getItem('token') || '';
+                    const authHeaders = token ? { 'Authorization': 'Bearer ' + token } : {};
+
+                    if (mode === 'file') {
+                      if (!legUploadFile || !legUploadFile.files || legUploadFile.files.length === 0) {
+                        alert('Choisir un fichier.');
+                        return;
+                      }
+                      const f = legUploadFile.files[0];
+                      const fd = new FormData();
+                      fd.append('file', f);
+                      if (title) fd.append('title', title);
+                      if (desc) fd.append('desc', desc);
+
+                      const res = await fetch('/api/legislation/upload', { method: 'POST', headers: authHeaders, body: fd });
+                      if (!res.ok) throw new Error('Status ' + res.status);
+                      await res.json().catch(() => null);
+                      // reset form
+                      legUploadFile.value = '';
+                      if (legUploadTitle) legUploadTitle.value = '';
+                      if (legUploadDesc) legUploadDesc.value = '';
+                      await refresh();
+                      alert('Fichier ajouté.');
+                    } else {
+                      // link mode
+                      const raw = legLink && legLink.value ? legLink.value.trim() : '';
+                      if (!raw) { alert('Entrer une URL (http/https).'); return; }
+                      const payload = { url: raw };
+                      if (title) payload.title = title;
+                      if (desc) payload.desc = desc;
+
+                      const res = await fetch('/api/legislation/link', {
+                        method: 'POST',
+                        headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders),
+                        body: JSON.stringify(payload)
+                      });
+                      if (!res.ok) {
+                        const txt = await res.text().catch(() => '');
+                        throw new Error('Status ' + res.status + ' ' + txt);
+                      }
+                      await res.json().catch(() => null);
+                      if (legLink) legLink.value = '';
+                      if (legUploadTitle) legUploadTitle.value = '';
+                      if (legUploadDesc) legUploadDesc.value = '';
+                      await refresh();
+                      alert('Lien ajouté.');
+                    }
+                  } catch (err) {
+                    console.error('leg form submit error', err);
+                    alert('Échec: ' + (err && err.message ? err.message : 'erreur'));
+                  } finally {
+                    legUploadSubmit.disabled = false;
+                    legUploadSubmit.textContent = 'Ajouter';
+                  }
+                });
+              }
+            })();
+
+            // init
+            document.addEventListener('DOMContentLoaded', () => { refresh(); });
+            // expose
+            window.renderLegislation = refresh;
+          })();
+        </script>
+      </section>
+      <!-- FIN : panel Législation -->
+
+      <!-- AGENDA panel -->
+      <section id="panel-agenda" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-agenda">
+        <div class="panel-grid">
+          <div>
+            <h2>Agenda</h2>
+            <div class="agenda" id="agendaContainer">
+              <p class="muted">Vue calendrier à venir — intégration possible de FullCalendar ou d'un calendrier léger.
+              </p>
+              <p class="center">[Vue mensuelle / hebdo — placeholder]</p>
+            </div>
+          </div>
+
+          <aside class="edt-side-panel">
+            <h3>Filtres Agenda</h3>
+            <label class="muted">Sélectionner période</label>
+            <input type="date" id="agendaFrom" class="edt-input" />
+            <input type="date" id="agendaTo" class="edt-input" style="margin-top:8px;" />
+            <button class="edt-btn" id="btnApplyAgendaFilters">Appliquer</button>
+          </aside>
+        </div>
+      </section>
+
+      <!-- RESOURCES panel -->
+      <section id="panel-resources" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-resources">
+        <div class="panel-grid">
+          <div>
+            <h2>Ressources</h2>
+            <div class="resources-list">
+              <div style="background:#fff;border-radius:10px;padding:12px;border:1px solid #eef2f8;">
+                <strong>Salles</strong>
+                <div class="muted">Liste des salles disponibles, capacité, équipements.</div>
+              </div>
+              <div style="background:#fff;border-radius:10px;padding:12px;border:1px solid #eef2f8;">
+                <strong>Matériels</strong>
+                <div class="muted">Projecteurs, ordinateurs, etc.</div>
+              </div>
+              <div style="background:#fff;border-radius:10px;padding:12px;border:1px solid #eef2f8;">
+                <strong>Personnels</strong>
+                <div class="muted">Contacts administratifs & techniciens.</div>
+              </div>
+            </div>
+          </div>
+
+          <aside class="edt-side-panel">
+            <h3>Recherche ressources</h3>
+            <input id="resourceSearch" class="edt-input" placeholder="Rechercher" />
+            <div style="margin-top:12px;"><button class="edt-btn" id="btnSearchResources">Rechercher</button></div>
+          </aside>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- edt events renderer (served from /static) -->
+  <script src="/static/edt-events-renderer.js" defer></script>
+
+  <!-- Tab handling script (original, preserved) -->
+  <script>
+    (function () {
+      const tabButtons = Array.from(document.querySelectorAll('.tab-btn[role="tab"]'));
+      const panels = Array.from(document.querySelectorAll('.tab-panel'));
+
+      function activateTab(button) {
+        // deactivate all
+        tabButtons.forEach(b => {
+          b.setAttribute('aria-selected', 'false');
+          b.setAttribute('tabindex', '-1');
+        });
+        panels.forEach(p => p.classList.remove('active'));
+
+        // activate selected
+        button.setAttribute('aria-selected', 'true');
+        button.setAttribute('tabindex', '0');
+        const panel = document.getElementById(button.getAttribute('aria-controls'));
+        if (panel) panel.classList.add('active');
+
+        // persist selection
+        try { localStorage.setItem('gestad.activeTab', button.id); } catch (e) { }
+      }
+
+      // click handlers
+      tabButtons.forEach(btn => {
+        btn.addEventListener('click', () => activateTab(btn));
+        // keyboard navigation (Left/Right/Home/End)
+        btn.addEventListener('keydown', (e) => {
+          const idx = tabButtons.indexOf(btn);
+          if (e.key === 'ArrowRight') { e.preventDefault(); tabButtons[(idx + 1) % tabButtons.length].focus(); }
+          else if (e.key === 'ArrowLeft') { e.preventDefault(); tabButtons[(idx - 1 + tabButtons.length) % tabButtons.length].focus(); }
+          else if (e.key === 'Home') { e.preventDefault(); tabButtons[0].focus(); }
+          else if (e.key === 'End') { e.preventDefault(); tabButtons[tabButtons.length - 1].focus(); }
+          else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activateTab(document.activeElement); }
+        });
+      });
+
+      // restore last tab from localStorage and manage create bindings
+      document.addEventListener('DOMContentLoaded', () => {
+        const last = localStorage.getItem('gestad.activeTab');
+        const button = last ? document.getElementById(last) : document.getElementById('tab-button-events');
+        if (button) activateTab(button);
+
+        // Quick create: bind sidebar quick create button (btnCreateQuick) if present
+        const sidebarCreateBtn = document.getElementById('btnCreateQuick') || document.getElementById('qCreateBtn');
+        if (sidebarCreateBtn) {
+          sidebarCreateBtn.addEventListener('click', async () => {
+            // find fields (support both quick form ids and full form ids)
+            const titleEl = document.getElementById('qTitle') || document.getElementById('title');
+            const descEl = document.getElementById('qDesc') || document.getElementById('description');
+            const dateEl = document.getElementById('qDate') || document.getElementById('start_date');
+            const startTimeEl = document.getElementById('qStartTime') || document.getElementById('start_time');
+            const endTimeEl = document.getElementById('qEndTime') || document.getElementById('end_time');
+            const allDayEl = document.getElementById('qAllDay') || document.getElementById('all_day');
+
+            const title = titleEl ? titleEl.value.trim() : '';
+            const desc = descEl ? descEl.value.trim() : '';
+            const date = dateEl ? dateEl.value : '';
+            const start_time = startTimeEl ? startTimeEl.value : '';
+            const end_time = endTimeEl ? endTimeEl.value : '';
+            const allDay = allDayEl ? !!allDayEl.checked : false;
+
+            if (!title || !date) { alert('Titre et date requis'); return; }
+
+            try {
+              const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+              const res = await fetch('/api/events', {
+                method: 'POST',
+                headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { 'Authorization': 'Bearer ' + token } : {}),
+                body: JSON.stringify({ title, description: desc, start_date: date, start_time: start_time || null, end_time: end_time || null, all_day: allDay })
+              });
+              if (!res.ok) throw new Error('Status ' + res.status);
+              // refresh events
+              if (window.loadAndRenderEvents) window.loadAndRenderEvents('#events', { apiUrl: '/api/events' });
+              // clear both possible forms
+              if (titleEl) titleEl.value = '';
+              if (descEl) descEl.value = '';
+              if (dateEl) dateEl.value = '';
+              if (startTimeEl) startTimeEl.value = '';
+              if (endTimeEl) endTimeEl.value = '';
+              if (allDayEl) allDayEl.checked = false;
+            } catch (err) {
+              console.error(err);
+              alert('Création échouée : ' + (err && err.message));
+            }
+          });
+        }
+
+        // Full form create button (createSection) if present
+        const fullCreateBtn = document.getElementById('btnCreateFull');
+        if (fullCreateBtn) {
+          fullCreateBtn.addEventListener('click', async () => {
+            const titleEl = document.getElementById('title');
+            const descEl = document.getElementById('description');
+            const dateEl = document.getElementById('start_date');
+            const startTimeEl = document.getElementById('start_time');
+            const endDateEl = document.getElementById('end_date');
+            const endTimeEl = document.getElementById('end_time');
+            const allDayEl = document.getElementById('all_day');
+
+            const title = titleEl ? titleEl.value.trim() : '';
+            const desc = descEl ? descEl.value.trim() : '';
+            const date = dateEl ? dateEl.value : '';
+            const start_time = startTimeEl ? startTimeEl.value : '';
+            const end_date = endDateEl ? endDateEl.value : '';
+            const end_time = endTimeEl ? endTimeEl.value : '';
+            const allDay = allDayEl ? !!allDayEl.checked : false;
+
+            if (!title || !date) { alert('Titre et date requis'); return; }
+
+            try {
+              const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+              const res = await fetch('/api/events', {
+                method: 'POST',
+                headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { 'Authorization': 'Bearer ' + token } : {}),
+                body: JSON.stringify({ title, description: desc, start_date: date, start_time: start_time || null, end_date: end_date || null, end_time: end_time || null, all_day: allDay })
+              });
+              if (!res.ok) throw new Error('Status ' + res.status);
+              if (window.loadAndRenderEvents) window.loadAndRenderEvents('#events', { apiUrl: '/api/events' });
+              if (titleEl) titleEl.value = '';
+              if (descEl) descEl.value = '';
+              if (dateEl) dateEl.value = '';
+              if (startTimeEl) startTimeEl.value = '';
+              if (endDateEl) endDateEl.value = '';
+              if (endTimeEl) endTimeEl.value = '';
+              if (allDayEl) allDayEl.checked = false;
+            } catch (err) {
+              console.error(err);
+              alert('Création échouée : ' + (err && err.message));
+            }
+          });
+        }
+      });
+    })();
+
+  </script>
+
+  <!-- glue script: expose modal controls for app.js and auto-open if not logged -->
+  <script>
+    (function () {
+      const loginModal = document.getElementById('loginModal');
+      const appPage = document.getElementById('appPage') || document.querySelector('.page');
+
+      function openLoginModal() {
+        if (loginModal) loginModal.classList.remove('hidden');
+        if (appPage) appPage.classList.add('locked');
+        const u = document.getElementById('loginUsername');
+        if (u) u.focus();
+      }
+      function closeLoginModal() {
+        if (loginModal) loginModal.classList.add('hidden');
+        if (appPage) appPage.classList.remove('locked');
+      }
+
+      // expose for app.js
+      window.openLoginModal = openLoginModal;
+      window.closeLoginModal = closeLoginModal;
+
+      // cancel clears fields (keeps modal open by default)
+      const btnCancelLogin = document.getElementById('btnCancelLogin');
+      if (btnCancelLogin) {
+        btnCancelLogin.addEventListener('click', () => {
+          const u = document.getElementById('loginUsername');
+          const p = document.getElementById('loginPassword');
+          if (u) u.value = '';
+          if (p) p.value = '';
+        });
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        const token = localStorage.getItem('token');
+        const username = localStorage.getItem('username');
+        if (!token || !username) openLoginModal();
+        else closeLoginModal();
+      });
+    })();
+  </script>
+  <script>
+    (function () {
+      // Remove duplicate modals and ensure modal is a direct child of body
+      const modals = Array.from(document.querySelectorAll('#loginModal'));
+      if (modals.length > 1) {
+        // Keep first occurrence, remove others
+        for (let i = 1; i < modals.length; i++) modals[i].remove();
+      }
+      const modal = document.getElementById('loginModal');
+      if (modal && modal.parentElement !== document.body) {
+        document.body.insertBefore(modal, document.body.firstChild);
+      }
+
+      // Optional: trap accidental blur by ensuring open/close functions exist
+      if (!window.openLoginModal) {
+        window.openLoginModal = function () { if (modal) modal.classList.remove('hidden'); const app = document.getElementById('appPage'); if (app) app.classList.add('locked'); };
+      }
+      if (!window.closeLoginModal) {
+        window.closeLoginModal = function () { if (modal) modal.classList.add('hidden'); const app = document.getElementById('appPage'); if (app) app.classList.remove('locked'); };
+      }
+    })();
+  </script>
+
+  <script>
+    (function () {
+      const qInput = document.getElementById('q');
+      const btnSearch = document.getElementById('btnSearch');
+      const resultsContainer = document.getElementById('globalSearchResults');
+      const buckets = document.getElementById('globalSearchBuckets');
+      const msg = document.getElementById('globalSearchMsg');
+      const btnClear = document.getElementById('btnClearGlobalSearch');
+
+      function showResultsPanel() {
+        resultsContainer.classList.remove('hidden');
+      }
+      function hideResultsPanel() {
+        resultsContainer.classList.add('hidden');
+        buckets.innerHTML = '';
+        msg.textContent = '';
+      }
+      if (btnClear) btnClear.addEventListener('click', () => { qInput.value = ''; hideResultsPanel(); });
+
+      // Helper: safe text escape for insertion
+      function esc(s) { return String(s === null || s === undefined ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+      // switch to a tab by id (uses existing tab logic via click)
+      function switchToTabButtonId(buttonId) {
+        const b = document.getElementById(buttonId);
+        if (b) b.click();
+      }
+
+      // Search documents (client-side mock first)
+      function searchDocuments(query) {
+        const out = [];
+        try {
+          const store = window.docsStore;
+          if (store) {
+            Object.keys(store).forEach(cat => {
+              (store[cat] || []).forEach(item => {
+                const hay = ((item.title || '') + ' ' + (item.desc || '')).toLowerCase();
+                if (hay.includes(query)) out.push(Object.assign({ type: 'document', category: cat }, item));
+              });
+            });
+          }
+        } catch (e) { console.debug('searchDocuments error', e); }
+        return out;
+      }
+
+      // Search legislation (via API)
+      async function searchLegislation(query) {
+        try {
+          const token = localStorage.getItem('token') || '';
+          const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+          const res = await fetch('/api/legislation', { headers });
+          if (!res.ok) return [];
+          const data = await res.json().catch(() => []);
+          return (data || []).filter(it => (((it.title || it.originalName || '') + ' ' + (it.desc || '')).toLowerCase().includes(query))).map(it => Object.assign({ type: 'legislation' }, it));
+        } catch (e) { console.debug('searchLegislation error', e); return []; }
+      }
+
+      // Search events (try server search endpoint, fallback to full list)
+      async function searchEvents(query) {
+        try {
+          const token = localStorage.getItem('token') || '';
+          const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+          // try query param first
+          let res = await fetch('/api/events?search=' + encodeURIComponent(query), { headers });
+          if (!res.ok) {
+            // fallback: fetch all then filter
+            res = await fetch('/api/events', { headers });
+            if (!res.ok) return [];
+            const all = await res.json().catch(() => []);
+            return (Array.isArray(all) ? all : (Array.isArray(all.data) ? all.data : [])).filter(ev => (((ev.title || '') + ' ' + (ev.description || '')).toLowerCase().includes(query))).map(ev => Object.assign({ type: 'event' }, ev));
+          }
+          const data = await res.json().catch(() => []);
+          return (Array.isArray(data) ? data : (Array.isArray(data.data) ? data.data : [])).map(ev => Object.assign({ type: 'event' }, ev));
+        } catch (e) { console.debug('searchEvents error', e); return []; }
+      }
+
+      // Search resources panel (DOM)
+      function searchResources(query) {
+        const out = [];
+        try {
+          const panel = document.getElementById('panel-resources');
+          if (!panel) return out;
+          // find candidate items in resources-list
+          const items = Array.from(panel.querySelectorAll('.resources-list > div, li, p, strong'));
+          items.forEach(node => {
+            const text = (node.textContent || '').toLowerCase();
+            if (text.includes(query)) {
+              out.push({ type: 'resource', title: (node.querySelector && node.querySelector('strong') ? node.querySelector('strong').textContent : (node.textContent || '')).trim(), snippet: node.textContent.trim() });
+            }
+          });
+        } catch (e) { console.debug('searchResources error', e); }
+        return out;
+      }
+
+      function renderBucket(title, items, renderItem) {
+        const section = document.createElement('div');
+        const h = document.createElement('div');
+        h.innerHTML = '<strong>' + esc(title) + '</strong>';
+        section.appendChild(h);
+        if (!items || items.length === 0) {
+          const empty = document.createElement('div');
+          empty.className = 'muted';
+          empty.style.padding = '6px 0';
+          empty.textContent = 'Aucun résultat';
+          section.appendChild(empty);
+          return section;
+        }
+        const ul = document.createElement('ul');
+        ul.style.listStyle = 'none';
+        ul.style.padding = '0';
+        ul.style.margin = '6px 0 0 0';
+        ul.style.display = 'flex';
+        ul.style.flexDirection = 'column';
+        ul.style.gap = '8px';
+        items.forEach(it => {
+          const li = document.createElement('li');
+          li.style.display = 'flex';
+          li.style.justifyContent = 'space-between';
+          li.style.alignItems = 'center';
+          li.style.padding = '8px';
+          li.style.border = '1px solid #eef2f8';
+          li.style.borderRadius = '8px';
+          const left = document.createElement('div');
+          left.style.flex = '1';
+          left.style.marginRight = '12px';
+          left.innerHTML = renderItem(it);
+          const right = document.createElement('div');
+          // action button(s) appended by caller via data
+          if (it._openBtn) right.appendChild(it._openBtn);
+          li.appendChild(left);
+          li.appendChild(right);
+          ul.appendChild(li);
+        });
+        section.appendChild(ul);
+        return section;
+      }
+
+      // Build results and display
+      // Remplacer la fonction doGlobalSearch par ce bloc
+      (function () {
+        // token for latest call
+        let latestCallId = 0;
+        // global counter to help debugging
+        window._doGlobalSearchCallCount = window._doGlobalSearchCallCount || 0;
+
+        // remplace la fonction doGlobalSearch et le binding btnSearch/qInput
+        (function () {
+          // helper utilities
+          function esc(s) { return String(s === null || s === undefined ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+          function highlightNode(node) {
+            if (!node) return;
+            const prev = node.style.boxShadow;
+            node.style.transition = 'box-shadow 0.3s ease, background-color 0.3s ease';
+            node.style.boxShadow = '0 0 0 3px rgba(102,126,234,0.15)';
+            const origBg = node.style.backgroundColor;
+            node.style.backgroundColor = '#fff8db';
+            setTimeout(() => {
+              node.style.boxShadow = prev || '';
+              node.style.backgroundColor = origBg || '';
+            }, 2200);
+          }
+
+          async function ensureTabAndDelay(tabButtonId, delay = 220) {
+            const btn = document.getElementById(tabButtonId);
+            if (btn) btn.click();
+            // small delay to allow tab rendering
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+
+          // try to locate and scroll to a matching element in docs list
+          async function goToDocumentMatch(rawQuery, category) {
+            // select category button if provided
+            try {
+              if (category) {
+                const catBtn = document.querySelector('.doc-cat-btn[data-cat="' + category + '"]');
+                if (catBtn) catBtn.click();
+              }
+              // ask renderDocs to filter if available (category, filter)
+              if (window.renderDocs) {
+                try { window.renderDocs(category || window.getActiveDocsCategory?.() || undefined, rawQuery); } catch (e) { /* ignore */ }
+              }
+              // wait for DOM render
+              await new Promise(r => setTimeout(r, 300));
+              const list = document.getElementById('docsItems');
+              if (!list) return false;
+              const q = (rawQuery || '').toLowerCase();
+              // search within item cards (texts)
+              const candidates = Array.from(list.querySelectorAll('li, .docs-doc-card, .docs-year-group, .docs-doc-card *'));
+              // prefer container nodes that include the match
+              for (const node of candidates) {
+                if ((node.textContent || '').toLowerCase().includes(q)) {
+                  // find nearest card row to scroll to
+                  const card = node.closest('.docs-doc-card') || node.closest('li') || node;
+                  if (card) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    highlightNode(card);
+                    return true;
+                  }
+                }
+              }
+              // fallback: try to find by anchor text inside document cards
+              const items = Array.from(list.querySelectorAll('a, button, span, div'));
+              const found = items.find(it => (it.textContent || '').toLowerCase().includes(q));
+              if (found) {
+                const card = found.closest('.docs-doc-card') || found.closest('li') || found;
+                if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); highlightNode(card); return true; }
+              }
+              return false;
+            } catch (err) {
+              console.debug('goToDocumentMatch error', err);
+              return false;
+            }
+          }
+
+          // locate & scroll legislation item
+          async function goToLegislationMatch(rawQuery) {
+            try {
+              if (window.renderLegislation) {
+                try { window.renderLegislation(); } catch (e) { /* ignore */ }
+              }
+              await new Promise(r => setTimeout(r, 300));
+              const container = document.getElementById('legItems');
+              if (!container) return false;
+              const q = (rawQuery || '').toLowerCase();
+              const lis = Array.from(container.querySelectorAll('li'));
+              for (const li of lis) {
+                if ((li.textContent || '').toLowerCase().includes(q)) {
+                  li.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  highlightNode(li);
+                  return true;
+                }
+              }
+              return false;
+            } catch (err) {
+              console.debug('goToLegislationMatch error', err);
+              return false;
+            }
+          }
+
+          // locate & scroll event match
+          async function goToEventMatch(rawQuery) {
+            try {
+              // if specialized renderer supports search param, call it
+              if (window.loadAndRenderEvents) {
+                try { window.loadAndRenderEvents('#events', { apiUrl: '/api/events', search: rawQuery }); } catch (e) { /* ignore */ }
+              }
+              await new Promise(r => setTimeout(r, 300));
+              const evCont = document.getElementById('events');
+              if (!evCont) return false;
+              const q = (rawQuery || '').toLowerCase();
+              // search in event cards or children
+              const candidates = Array.from(evCont.querySelectorAll('*'));
+              for (const node of candidates) {
+                if ((node.textContent || '').toLowerCase().includes(q)) {
+                  const card = node.closest('.edt-event-card') || node.closest('article') || node.closest('div');
+                  (card || node).scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  highlightNode(card || node);
+                  return true;
+                }
+              }
+              // fallback: scroll to events container
+              evCont.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              return false;
+            } catch (err) {
+              console.debug('goToEventMatch error', err);
+              return false;
+            }
+          }
+
+          // locate & scroll resource match
+          async function goToResourceMatch(rawQuery) {
+            try {
+              await new Promise(r => setTimeout(r, 200));
+              const panel = document.getElementById('panel-resources');
+              if (!panel) return false;
+              const q = (rawQuery || '').toLowerCase();
+              const node = Array.from(panel.querySelectorAll('*')).find(n => (n.textContent || '').toLowerCase().includes(q));
+              if (node) { node.scrollIntoView({ behavior: 'smooth', block: 'center' }); highlightNode(node); return true; }
+              return false;
+            } catch (err) {
+              console.debug('goToResourceMatch error', err);
+              return false;
+            }
+          }
+
+          // main search function (expose as window.doGlobalSearch)
+  // Remplace la fonction doGlobalSearch existante par celle-ci
+  window.doGlobalSearch = async function doGlobalSearch(rawQuery) {
+    const q = (rawQuery || '').trim();
+    const qLower = q.toLowerCase();
+    if (!q) { msg.textContent = 'Entrer un terme de recherche.'; showResultsPanel(); return; }
+    msg.textContent = 'Recherche en cours…';
+    showResultsPanel();
+    buckets.innerHTML = ''; // clear
+
+    // run searches
+    const docs = searchDocuments(qLower) || [];
+    const [leg, evs] = await Promise.all([searchLegislation(qLower), searchEvents(qLower)]);
+    const resources = searchResources(qLower) || [];
+
+    // Build counts per source (ensure single entry per source)
+    const counts = {
+      Documents: docs.length || 0,
+      Législation: (leg || []).length || 0,
+      Événements: (evs || []).length || 0,
+      Ressources: resources.length || 0
+    };
+
+    const total = Object.values(counts).reduce((s, v) => s + v, 0);
+    if (total === 0) {
+      msg.textContent = 'Aucun résultat pour la recherchée demandée.';
+      buckets.innerHTML = '<div class="muted">Aucun résultat</div>';
+      return;
+    }
+
+    // render single-line-per-source with action button "Voir"
+    const ul = document.createElement('ul');
+    ul.style.listStyle = 'none';
+    ul.style.padding = '0';
+    ul.style.margin = '6px 0';
+    ul.style.display = 'flex';
+    ul.style.flexDirection = 'column';
+    ul.style.gap = '8px';
+
+    // helper to append a source row only once
+    function appendSourceRow(label, count, onClick) {
+      // Avoid duplicates: identify rows by data-source
+      if (ul.querySelector(`[data-source="${label.replace(/"/g, '&quot;')}"]`)) return;
+      const li = document.createElement('li');
+      li.dataset.source = label;
+      li.style.padding = '8px';
+      li.style.border = '1px solid #eef2f8';
+      li.style.borderRadius = '8px';
+      li.style.background = '#fff';
+      const left = document.createElement('div');
+      left.style.display = 'inline-block';
+      left.innerHTML = '<strong>' + esc(label) + '</strong>' + (count > 1 ? ' — ' + count + ' résultats' : ' — 1 résultat');
+      const right = document.createElement('div');
+      right.style.display = 'inline-block';
+      right.style.float = 'right';
+      const btn = document.createElement('button');
+      btn.className = 'tab-btn';
+      btn.textContent = 'Voir';
+      btn.addEventListener('click', onClick);
+      right.appendChild(btn);
+      li.appendChild(left);
+      li.appendChild(right);
+      ul.appendChild(li);
+    }
+
+    // Documents row
+    if (counts.Documents > 0) {
+      appendSourceRow('Documents', counts.Documents, async () => {
+        await ensureTabAndDelay('tab-button-docs', 220);
+        const category = window.getActiveDocsCategory ? window.getActiveDocsCategory() : null;
+        const ok = await goToDocumentMatch(q, category);
+        if (!ok) {
+          if (window.renderDocs) {
+            try { window.renderDocs(category || undefined, q); } catch (e) { /* ignore */ }
+            setTimeout(() => goToDocumentMatch(q, category), 250);
+          } else {
+            alert('Aucun élément ciblé trouvé dans Documents.');
+          }
+        }
+      });
+    }
+
+    // Législation row
+    if (counts.Législation > 0) {
+      appendSourceRow('Législation', counts.Législation, async () => {
+        await ensureTabAndDelay('tab-button-legislation', 220);
+        const ok = await goToLegislationMatch(q);
+        if (!ok) { alert('Aucun élément ciblé trouvé dans Législation.'); }
+      });
+    }
+
+    // Événements row
+    if (counts.Événements > 0) {
+      appendSourceRow('Événements', counts.Événements, async () => {
+        await ensureTabAndDelay('tab-button-events', 200);
+        const ok = await goToEventMatch(q);
+        if (!ok) { alert('Aucun élément ciblé trouvé dans Événements.'); }
+      });
+    }
+
+    // Ressources row
+    if (counts.Ressources > 0) {
+      appendSourceRow('Ressources', counts.Ressources, async () => {
+        await ensureTabAndDelay('tab-button-resources', 200);
+        const ok = await goToResourceMatch(q);
+        if (!ok) { alert('Aucun élément ciblé trouvé dans Ressources.'); }
+      });
+    }
+
+    buckets.appendChild(ul);
+
+    // --- DÉTAILS : lister tous les éléments trouvés par source (si > 0) ---
+    const detailsWrapper = document.createElement('div');
+    detailsWrapper.style.marginTop = '12px';
+    detailsWrapper.style.display = 'flex';
+    detailsWrapper.style.flexDirection = 'column';
+    detailsWrapper.style.gap = '12px';
+
+    // Documents détaillés
+   // Documents détaillés — remplacer l'ancien bloc par celui-ci
+if (docs.length > 0) {
+  // prépare un href pour chaque document (priorise it.url, sinon /api/documents/:id/download, sinon null)
+  const docsWithLinks = docs.map(d => {
+    const href = (d && d.url && String(d.url).trim() && d.url !== '#')
+      ? d.url
+      : (d && d.id ? ('/api/documents/' + encodeURIComponent(d.id) + '/download') : null);
+    const copy = Object.assign({}, d);
+    copy._href = href;
+    return copy;
+  });
+
+  const docsSection = renderBucket('Documents trouvés', docsWithLinks, (it) => {
+    const titleText = esc(it.title || it.original_name || it.filename || '(sans titre)');
+    const meta = esc(it.desc || (it.id ? 'id: ' + it.id : ''));
+    if (it._href) {
+      return `<div style="display:flex;flex-direction:column;gap:6px;">
+                <div><a href="${esc(it._href)}" target="_blank" rel="noopener noreferrer"><strong>${titleText}</strong></a></div>
+                <div class="muted" style="margin-top:4px;">${meta}</div>
+              </div>`;
+    } else {
+      return `<div style="display:flex;flex-direction:column;gap:6px;">
+                <div><a href="#" onclick="event.preventDefault();alert('Aucune URL disponible pour ce document.');"><strong>${titleText}</strong></a></div>
+                <div class="muted" style="margin-top:4px;">${meta}</div>
+              </div>`;
+    }
+  });
+
+  detailsWrapper.appendChild(docsSection);
+}
+
+    // Législation détaillée
+    if (leg && leg.length > 0) {
+      const legSection = renderBucket('Législation trouvée', leg, (it) => {
+        const title = esc(it.title || it.originalName || it.storedName || '(sans titre)');
+        const meta = esc(it.desc || '');
+        return `<div><strong>${title}</strong><div class="muted" style="margin-top:4px;">${meta}</div></div>`;
+      });
+      detailsWrapper.appendChild(legSection);
+    }
+
+    // Événements détaillés
+    if (evs && evs.length > 0) {
+      const evSection = renderBucket('Événements trouvés', evs, (it) => {
+        const title = esc(it.title || '(sans titre)');
+        const when = esc((it.start_date || it.start) ? (it.start_date || it.start) : (it.date || ''));
+        return `<div><strong>${title}</strong><div class="muted" style="margin-top:4px;">${when}</div></div>`;
+      });
+      detailsWrapper.appendChild(evSection);
+    }
+
+    // Ressources détaillées
+    if (resources && resources.length > 0) {
+      const resSection = renderBucket('Ressources trouvées', resources, (it) => {
+        const title = esc(it.title || (it.snippet || '').slice(0, 80) || '(ressource)');
+        const meta = esc(it.snippet || '');
+        return `<div><strong>${title}</strong><div class="muted" style="margin-top:4px;">${meta}</div></div>`;
+      });
+      detailsWrapper.appendChild(resSection);
+    }
+
+    if (detailsWrapper.children.length) {
+      buckets.appendChild(detailsWrapper);
+    }
+
+    msg.textContent = 'Résultats pour « ' + esc(q) + ' » — ' + total + ' trouvés';
+  };
+
+          /* Bind search UI handlers (single assignment to avoid double-listeners)
+          if (typeof btnSearch !== 'undefined' && btnSearch) {
+            btnSearch.onclick = function () { try { window.doGlobalSearch(qInput.value); } catch (e) { console.error(e); } };
+          }
+          if (typeof qInput !== 'undefined' && qInput) {
+            qInput.onkeydown = function (e) {
+              if (e.key === 'Enter') { e.preventDefault(); window.doGlobalSearch(qInput.value); }
+              else if (e.key === 'Escape') { qInput.value = ''; hideResultsPanel(); }
+            };
+          }*/
+
+        })();
+
+        // expose
+        window.doGlobalSearch = doGlobalSearch;
+      })();
+
+      // bind UI
+      if (btnSearch) {
+        btnSearch.addEventListener('click', () => doGlobalSearch(qInput.value));
+      }
+      if (qInput) {
+        qInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') { e.preventDefault(); doGlobalSearch(qInput.value); }
+          if (e.key === 'Escape') { qInput.value = ''; hideResultsPanel(); }
+        });
+      }
+
+      // expose
+      window.doGlobalSearch = doGlobalSearch;
+      window.hideGlobalSearchResults = hideResultsPanel;
+    })();
+  </script>
+
+  <!-- Define attachYearToggleHandlers so renderDocs can call it after rendering groups -->
+  <script>
+    (function () {
+      window.attachYearToggleHandlers = function attachYearToggleHandlers() {
+        const container = document.getElementById('docsItems') ||
+          document.getElementById('documentsList') ||
+          document.getElementById('documentsContainer') ||
+          document.getElementById('documents');
+        if (!container) return;
+
+        const groups = Array.from(container.querySelectorAll('.docs-year-group'));
+        groups.forEach(group => {
+          const header = group.querySelector('.docs-year-header');
+          const content = group.querySelector('.docs-doc-cards');
+          if (!header || !content) return;
+
+          // remove previous handler if present
+          if (header._yearToggleHandler) header.removeEventListener('click', header._yearToggleHandler);
+
+          const onClick = (e) => {
+            const isOpen = group.classList.contains('open');
+            if (isOpen) {
+              // collapse
+              content.style.maxHeight = content.scrollHeight + 'px';
+              requestAnimationFrame(() => {
+                content.style.maxHeight = '0px';
+                content.style.opacity = '0';
+              });
+              group.classList.remove('open');
+            } else {
+              // collapse siblings
+              const siblings = Array.from(container.querySelectorAll('.docs-year-group.open')).filter(s => s !== group);
+              siblings.forEach(s => {
+                s.classList.remove('open');
+                const sContent = s.querySelector('.docs-doc-cards');
+                if (sContent) {
+                  sContent.style.maxHeight = sContent.scrollHeight + 'px';
+                  requestAnimationFrame(() => { sContent.style.maxHeight = '0px'; sContent.style.opacity = '0'; });
+                }
+              });
+
+              // expand
+              group.classList.add('open');
+              const h = content.scrollHeight;
+              content.style.maxHeight = h + 'px';
+              content.style.opacity = '1';
+
+              const onTransitionEnd = (ev) => {
+                if (ev.propertyName === 'max-height') {
+                  content.style.maxHeight = 'none';
+                  content.removeEventListener('transitionend', onTransitionEnd);
+                }
+              };
+              content.addEventListener('transitionend', onTransitionEnd);
+            }
+          };
+
+          header.addEventListener('click', onClick);
+          header._yearToggleHandler = onClick;
+        });
+      };
+    })();
+  </script>
+  <script>
+    // Ajoute ce code après l'init de la UI documents (ou dans un <script> en bas)
+    (function installRepairButton() {
+      const container = document.querySelector('.docs-list') || document.getElementById('docsList') || document.body;
+      if (!container) return;
+
+      // create button if not exists
+      if (document.getElementById('btnRepairMissing')) return;
+      const btn = document.createElement('button');
+      btn.id = 'btnRepairMissing';
+      btn.className = 'edt-btn';
+      btn.textContent = 'Réparer éléments manquants';
+      btn.style.marginLeft = '8px';
+      // append near upload controls if possible
+      const ctrlArea = document.querySelector('#docsList > div') || container;
+      ctrlArea.appendChild(btn);
+
+      // Handler: open file picker (user activation) and process selected files
+      btn.addEventListener('click', async () => {
+        // Ensure we have the last skipped list from last save (the saveDocs function should set window._lastSaveSkipped)
+        const skipped = window._lastSaveSkipped || [];
+        if (!skipped || skipped.length === 0) {
+          alert('Aucun élément manquant détecté lors du dernier envoi. Lancez "Enregistrer" puis réessayez si besoin.');
+          return;
+        }
+
+        // open file picker
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = true;
+        input.style.display = 'none';
+        document.body.appendChild(input);
+
+        input.onchange = async () => {
+          const files = Array.from(input.files || []);
+          document.body.removeChild(input);
+
+          if (!files.length) { alert('Aucun fichier sélectionné.'); return; }
+
+          // Try to match selected files to skipped items by filename (heuristic)
+          const matches = [];
+          for (const s of skipped) {
+            const wantName = (s.item && (s.item.filename || s.item.title)) ? String(s.item.filename || s.item.title).toLowerCase() : null;
+            const found = wantName ? files.find(f => f.name.toLowerCase().includes(wantName) || f.name.toLowerCase() === wantName) : null;
+            if (found) matches.push({ skippedItem: s, file: found });
+          }
+
+          if (matches.length === 0) {
+            // if no heuristic match, ask user to choose which file corresponds to which item manually
+            if (!confirm('Aucun fichier apparié automatiquement. Voulez-vous tenter d\'uploader tous les fichiers sélectionnés et réessayer l\'envoi ?')) return;
+          }
+
+          // Upload matched files first
+          for (const m of matches) {
+            try {
+              // This upload function must be the normalized one (returns document or {document:...})
+              const created = await uploadFileToServer(m.file);
+              const createdDoc = (created && created.document) ? created.document : created;
+              // Attach created reference to the skipped item so next saveDocs picks it up
+              m.skippedItem.item.created = createdDoc;
+              console.info('Uploaded and attached created:', createdDoc, 'for', m.skippedItem.item);
+            } catch (err) {
+              console.error('Repair upload failed for', m.file.name, err);
+              alert('Échec de l\'upload pour ' + m.file.name + ' : ' + (err && err.message ? err.message : String(err)));
+              return;
+            }
+          }
+
+          // Optionally: if user selected extra files (not matched), we can attempt to set a created for first unmatched skipped items
+          // Now re-run saveDocs to include newly uploaded created references
+          try {
+            await saveDocs();
+          } catch (e) {
+            console.error('saveDocs after repair failed', e);
+            alert('Échec lors du nouvel envoi après réparation. Voir console.');
+          }
+        };
+
+        // Trigger the chooser (this is in direct click handler so allowed)
+        input.click();
+      });
+    })();
+  </script>
+  <!-- existing app script if any -->
+  <script type="module" src="/static/app.js"></script>
+</body>
+
+</html>

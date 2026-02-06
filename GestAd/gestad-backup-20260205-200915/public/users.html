@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestion des Utilisateurs - GestAd</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>GestAd</h1>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="index.html" class="nav-item">
+                    <i class="fas fa-home"></i>
+                    <span>Accueil</span>
+                </a>
+                <a href="documents.html" class="nav-item">
+                    <i class="fas fa-file-alt"></i>
+                    <span>Documents</span>
+                </a>
+                <a href="calendar.html" class="nav-item">
+                    <i class="fas fa-calendar"></i>
+                    <span>Calendrier</span>
+                </a>
+                <a href="users.html" class="nav-item active">
+                    <i class="fas fa-users"></i>
+                    <span>Utilisateurs</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <a href="profile.html" class="user-info" id="sidebarUserInfo" title="Mon profil">
+                    <i class="fas fa-user-circle"></i>
+                    <span>Chargement...</span>
+                </a>
+                <button class="btn btn-secondary btn-sm" onclick="logout()">
+                    <i class="fas fa-sign-out-alt"></i> Déconnexion
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="content-header">
+                <h1>
+                    <i class="fas fa-users"></i>
+                    Gestion des Utilisateurs
+                </h1>
+
+                <div class="header-actions">
+                    <button class="btn btn-primary" onclick="openCreateUserModal()">
+                        <i class="fas fa-plus"></i> Nouvel Utilisateur
+                    </button>
+                </div>
+            </header>
+
+            <!-- Filtres -->
+            <div class="filters-bar">
+                <div class="filter-group">
+                    <input type="search" id="searchInput" placeholder="Rechercher par nom, email..."
+                        class="search-input">
+                </div>
+
+                <div class="filter-group">
+                    <select id="roleFilter" class="filter-select">
+                        <option value="">Tous les rôles</option>
+                        <option value="admin">Administrateur</option>
+                        <option value="editor">Éditeur</option>
+                        <option value="viewer">Lecteur</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <select id="statusFilter" class="filter-select">
+                        <option value="">Tous les statuts</option>
+                        <option value="active">Actifs</option>
+                        <option value="inactive">Inactifs</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Tableau des utilisateurs -->
+            <div class="card">
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Utilisateur</th>
+                                <th>Email</th>
+                                <th>Rôle</th>
+                                <th>Statut</th>
+                                <th>Dernière connexion</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                            <tr>
+                                <td colspan="6" class="text-center">
+                                    <i class="fas fa-spinner fa-spin"></i> Chargement...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="components/UserModal.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/toast.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/users.js"></script>
+</body>
+
+</html>

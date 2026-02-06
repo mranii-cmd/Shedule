@@ -1,0 +1,8 @@
+node_modules
+backups
+.env
+.git
+.gitignore
+Dockerfile*
+pasted*.txt
+npm-debug.log
