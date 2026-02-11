@@ -11,6 +11,7 @@ import VolumeService from '../services/VolumeService.js';
 // import { escapeHTML } from '../utils/sanitizers.js';
 import VolumeRenderer from '../ui/VolumeRenderer.js';
 import { attachIndicator } from '../ui/indicators.js';
+import { filterSubjectsByDepartment } from '../utils/helpers.js';
 
 class DashboardRenderer {
     constructor() {
@@ -301,6 +302,10 @@ class DashboardRenderer {
             return '';
         }
 
+        // Filtrer par département avant tout traitement
+        const departement = StateManager.state?.header?.departement || '';
+        const filteredByDept = filterSubjectsByDepartment(subjectStats, departement);
+
         // déterminer la session et les séances correspondantes
         const seancesSession = this.getSessionSeances();
 
@@ -315,13 +320,13 @@ class DashboardRenderer {
 
         if (subjectNamesInSession.size > 0) {
             // filtrer subjectStats pour ne garder que les matières présentes dans la session
-            filteredStats = subjectStats.filter(s => subjectNamesInSession.has(String(s.nom || '').trim()));
+            filteredStats = filteredByDept.filter(s => subjectNamesInSession.has(String(s.nom || '').trim()));
         } else {
             // fallback : utiliser les filières de la session pour lister les matières rattachées aux filières
             const filieresNames = this.getSessionFilieresNames();
 
             if (filieresNames.length > 0) {
-                filteredStats = subjectStats.filter(s => {
+                filteredStats = filteredByDept.filter(s => {
                     const filiere = (s.filiere || (s.config && s.config.filiere) || '').toString().trim();
                     return filiere && filieresNames.includes(filiere);
                 });
@@ -331,7 +336,7 @@ class DashboardRenderer {
                 const inferredNames = new Set(
                     allSeances.map(s => (s.matiere || s.subject || s.nom || '').toString().trim()).filter(Boolean)
                 );
-                filteredStats = subjectStats.filter(s => inferredNames.has(String(s.nom || '').trim()));
+                filteredStats = filteredByDept.filter(s => inferredNames.has(String(s.nom || '').trim()));
             }
         }
 
@@ -339,7 +344,7 @@ class DashboardRenderer {
             return `
                 <div class="subject-stats-section">
                     <h3>📚 Statistiques par Matière — Session courante</h3>
-                    <p>Aucune matière planifiée pour la session courante ou données introuvables.</p>
+                    <p>Aucune matière planifiée pour la session courante ou données introuvables${departement && departement !== 'Administration' ? ` (département: ${safeText(departement)})` : ''}.</p>
                 </div>
             `;
         }

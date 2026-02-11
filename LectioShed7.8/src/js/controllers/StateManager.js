@@ -11,6 +11,7 @@ import Subject from '../models/Subject.js';
 import DatabaseService from '../services/DatabaseService.js';
 import LogService from '../services/LogService.js';
 import { snapshotCurrentSession } from '../utils/stateHelpers.js';
+import SaveStatusIndicator from '../ui/SaveStatusIndicator.js';
 
 class StateManager {
     constructor() {
@@ -526,12 +527,22 @@ class StateManager {
         if (typeof window !== 'undefined') {
             try {
                 if (!window.__edt_authenticated) {
-                    console.debug('StateManager. saveState: skipping remote save — not authenticated');
+                    console.debug('StateManager.saveState: skipping remote save — not authenticated');
                     return;
                 }
             } catch (e) { /* noop */ }
         }
         // END PATCH
+        
+        // Show saving indicator
+        try {
+            if (!silent && SaveStatusIndicator) {
+                SaveStatusIndicator.showSaving();
+            }
+        } catch (e) {
+            console.debug('SaveStatusIndicator.showSaving failed:', e);
+        }
+        
         try {
             // --- 1. Données Globales ---
             const globalData = { ...this.state };
@@ -612,10 +623,28 @@ class StateManager {
                     window.dispatchEvent(new CustomEvent('app:stateUpdated', { detail: { timestamp: Date.now() } }));
                 }
             } catch (e) { /* noop */ }
+            
+            // Show saved indicator
+            try {
+                if (!silent && SaveStatusIndicator) {
+                    SaveStatusIndicator.showSaved();
+                }
+            } catch (e) {
+                console.debug('SaveStatusIndicator.showSaved failed:', e);
+            }
 
         } catch (err) {
             // Erreur critique de persistance
             console.error('Erreur saveState:', err);
+            
+            // Show error indicator
+            try {
+                if (!silent && SaveStatusIndicator) {
+                    SaveStatusIndicator.showError();
+                }
+            } catch (e) {
+                console.debug('SaveStatusIndicator.showError failed:', e);
+            }
         }
     }
 

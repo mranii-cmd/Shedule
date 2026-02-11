@@ -225,3 +225,52 @@ export function formatDateFR(date = new Date()) {
         year: 'numeric' 
     });
 }
+
+/**
+ * Filtre les matières selon le département sélectionné
+ * Exception : "Administration" ou département vide affiche toutes les matières
+ * @param {Array} subjects - Liste des matières à filtrer
+ * @param {string} departement - Le département sélectionné (depuis header)
+ * @returns {Array} Les matières filtrées
+ */
+export function filterSubjectsByDepartment(subjects, departement) {
+    if (!subjects || !Array.isArray(subjects)) return [];
+    
+    // Si Administration ou vide, retourner toutes les matières
+    if (!departement || departement.trim() === '' || departement === 'Administration') {
+        return subjects;
+    }
+    
+    // Filtrer par département
+    return subjects.filter(subject => {
+        if (!subject) return false;
+        const subjectDept = subject.departement || subject?.config?.departement || '';
+        return subjectDept === departement;
+    });
+}
+
+/**
+ * Filtre les noms de matières selon le département sélectionné
+ * Utilisé quand on travaille avec Object.keys(matiereGroupes)
+ * Exception : "Administration" ou département vide retourne tous les noms
+ * @param {Array<string>} subjectNames - Liste des noms de matières
+ * @param {string} departement - Le département sélectionné
+ * @param {Object} matiereGroupes - L'objet matiereGroupes depuis StateManager
+ * @returns {Array<string>} Les noms de matières filtrés
+ */
+export function filterSubjectNamesByDepartment(subjectNames, departement, matiereGroupes) {
+    if (!subjectNames || !Array.isArray(subjectNames)) return [];
+    
+    // Si Administration ou vide, retourner tous les noms
+    if (!departement || departement.trim() === '' || departement === 'Administration') {
+        return subjectNames;
+    }
+    
+    // Filtrer par département
+    return subjectNames.filter(nom => {
+        const config = matiereGroupes?.[nom];
+        if (!config) return false;
+        const subjectDept = config.departement || '';
+        return subjectDept === departement;
+    });
+}
