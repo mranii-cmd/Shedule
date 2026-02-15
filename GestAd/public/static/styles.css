@@ -1,0 +1,571 @@
+/* ===========================================================
+   styles.css — Styles organisés et réutilisables
+   - Emplacements recommandés : public/static/styles.css
+   - Usage : base, layout, composants, utilitaires, responsive
+   =========================================================== */
+
+/* ----------------------------------------
+   0. Reset / Box sizing
+   ---------------------------------------- */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+/* Respect user prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ----------------------------------------
+   1. Variables CSS (thème)
+   ---------------------------------------- */
+:root {
+    /* Couleurs */
+    --color-bg: #ffffff;
+    --color-surface: #f8fafc;
+    --color-primary: #1d4ed8;
+    /* blue-700 */
+    --color-primary-600: #2563eb;
+    --color-accent: #f59e0b;
+    /* amber-500 */
+    --color-muted: #6b7280;
+    /* gray-500 */
+    --color-text: #111827;
+    /* gray-900 */
+    --color-success: #10b981;
+    --color-danger: #ef4444;
+    --color-border: #e5e7eb;
+
+    /* Typo */
+    --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Cantarell", "Fira Sans", sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Segoe UI Mono", monospace;
+
+    --fs-base: 16px;
+    --line-height: 1.45;
+
+    /* Spacing scale */
+    --space-xs: 4px;
+    --space-sm: 8px;
+    --space-md: 16px;
+    --space-lg: 24px;
+    --space-xl: 40px;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04);
+    --shadow-md: 0 6px 18px rgba(16, 24, 40, 0.08);
+
+    /* Breakpoints */
+    --bp-sm: 576px;
+    --bp-md: 768px;
+    --bp-lg: 1024px;
+    --bp-xl: 1280px;
+}
+
+/* ----------------------------------------
+   2. Global & typographie
+   ---------------------------------------- */
+html {
+    font-size: var(--fs-base);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color-scheme: light;
+    background: var(--color-bg);
+    color: var(--color-text);
+}
+
+body {
+    font-family: var(--font-sans);
+    line-height: var(--line-height);
+    font-size: 1rem;
+    background: var(--color-surface);
+    margin: 0;
+    min-height: 100%;
+}
+
+/* Headings */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    color: var(--color-text);
+    margin: 0 0 var(--space-sm) 0;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+h1 {
+    font-size: 1.75rem;
+}
+
+h2 {
+    font-size: 1.25rem;
+}
+
+h3 {
+    font-size: 1.1rem;
+}
+
+/* Paragraphs & lists */
+p {
+    margin: 0 0 var(--space-md) 0;
+}
+
+ul,
+ol {
+    margin: 0 0 var(--space-md) 1.25rem;
+    padding-left: 1rem;
+}
+
+/* Links */
+a {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+a:hover,
+a:focus {
+    text-decoration: underline;
+}
+
+/* ----------------------------------------
+   3. Accessibility helpers
+   ---------------------------------------- */
+.sr-only {
+    position: absolute !important;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Focus visible style (keyboard) */
+:focus {
+    outline: 3px solid rgba(37, 99, 235, 0.18);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* ----------------------------------------
+   4. Layout primitives
+   ---------------------------------------- */
+.container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
+    max-width: 1100px;
+}
+
+.row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+}
+
+/* Utility columns */
+.col {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.col-1 {
+    flex: 0 0 8.3333%;
+}
+
+.col-2 {
+    flex: 0 0 16.6667%;
+}
+
+.col-3 {
+    flex: 0 0 25%;
+}
+
+.col-6 {
+    flex: 0 0 50%;
+}
+
+/* Header / nav */
+.site-header {
+    background: linear-gradient(180deg, rgba(29, 78, 216, 0.05), transparent);
+    border-bottom: 1px solid var(--color-border);
+    padding: calc(var(--space-sm)) 0;
+}
+
+.site-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    font-weight: 700;
+}
+
+.site-nav {
+    display: flex;
+    gap: var(--space-sm);
+    align-items: center;
+}
+
+/* Main / footer */
+.site-main {
+    padding: var(--space-lg) 0;
+}
+
+.site-footer {
+    padding: var(--space-md) 0;
+    color: var(--color-muted);
+    border-top: 1px solid var(--color-border);
+}
+
+/* ----------------------------------------
+   5. Components
+   ---------------------------------------- */
+
+/* Buttons */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.9rem;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    cursor: pointer;
+    text-decoration: none;
+    user-select: none;
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Primary / secondary / ghost */
+.btn-primary {
+    background: var(--color-primary);
+    color: #fff;
+    border-color: var(--color-primary-600);
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-primary:hover {
+    background: var(--color-primary-600);
+}
+
+.btn-secondary {
+    background: #fff;
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--color-primary);
+    border: 1px dashed transparent;
+}
+
+/* Card */
+.card {
+    background: #fff;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    box-shadow: var(--shadow-sm);
+}
+
+.card+.card {
+    margin-top: var(--space-md);
+}
+
+/* Form controls */
+.form-group {
+    margin-bottom: var(--space-md);
+}
+
+.label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 600;
+    color: var(--color-muted);
+}
+
+.input,
+.select,
+.textarea {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--color-text);
+    font-size: 0.95rem;
+}
+
+.textarea {
+    min-height: 100px;
+    resize: vertical;
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.06);
+    outline: none;
+}
+
+/* Small helper text */
+.form-help {
+    font-size: 0.85rem;
+    color: var(--color-muted);
+    margin-top: 6px;
+}
+
+/* Alert */
+.alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    margin-bottom: var(--space-md);
+}
+
+.alert-info {
+    background: #eef2ff;
+    border-color: #c7d2fe;
+    color: #3730a3;
+}
+
+.alert-success {
+    background: #ecfdf5;
+    border-color: #bbf7d0;
+    color: #065f46;
+}
+
+.alert-error {
+    background: #fff1f2;
+    border-color: #fecaca;
+    color: #7f1d1d;
+}
+
+/* Table simple */
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    border: 1px solid var(--color-border);
+}
+
+.table th,
+.table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+    text-align: left;
+}
+
+.table th {
+    background: #fbfbfb;
+    font-weight: 700;
+}
+
+/* Small utilities for inline actions */
+.icon-btn {
+    background: transparent;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    color: var(--color-muted);
+}
+
+.icon-btn:hover {
+    color: var(--color-text);
+}
+
+/* ----------------------------------------
+   6. Utilities
+   ---------------------------------------- */
+.text-center {
+    text-align: center;
+}
+
+.m-0 {
+    margin: 0 !important;
+}
+
+.mt-1 {
+    margin-top: var(--space-sm) !important;
+}
+
+.mt-2 {
+    margin-top: var(--space-md) !important;
+}
+
+.mb-1 {
+    margin-bottom: var(--space-sm) !important;
+}
+
+.p-1 {
+    padding: var(--space-sm) !important;
+}
+
+.p-2 {
+    padding: var(--space-md) !important;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Grid helper (simple) */
+.grid {
+    display: grid;
+    gap: var(--space-md);
+}
+
+.grid-cols-2 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.grid-cols-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+/* ----------------------------------------
+   7. Responsive
+   ---------------------------------------- */
+@media (max-width: calc(var(--bp-md) - 1px)) {
+    .site-nav {
+        display: none;
+    }
+
+    /* mobile: show burger in markup if needed */
+    .grid-cols-3 {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (min-width: var(--bp-md)) {
+    .site-nav {
+        display: flex;
+    }
+}
+
+/* ----------------------------------------
+   8. Small components specific to app (events)
+   ---------------------------------------- */
+.event {
+    display: flex;
+    gap: var(--space-md);
+    align-items: flex-start;
+    padding: var(--space-sm);
+    border-bottom: 1px dashed var(--color-border);
+}
+
+.event .meta {
+    min-width: 96px;
+    color: var(--color-muted);
+    font-size: 0.9rem;
+}
+
+/* ----------------------------------------
+   9. Print styles (light)
+   ---------------------------------------- */
+@media print {
+    body {
+        background: #fff;
+        color: #000;
+    }
+
+    .site-header,
+    .site-footer,
+    .btn {
+        display: none !important;
+    }
+
+    .container {
+        padding: 0;
+    }
+}
+
+/* ----------------------------------------
++   Removal animation for document rows/cards
++   Applied when an item is being deleted (class "removing")
++   ---------------------------------------- */
+.list-item.removing,
+.document-item.removing,
+.docs-doc-card.removing {
+    opacity: 0;
+    transform: translateY(8px) scale(.98);
+    transition: opacity .28s ease, transform .28s ease;
+    pointer-events: none;
+}
+
+/* Events: rendu en cartes/étiquettes similaire aux documents */
+.event-item,
+#events .event-item {
+    background: #ffffff;
+    border: 1px solid #eef2f8;
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 10px;
+    display: block;
+    box-shadow: 0 4px 8px rgba(16, 24, 40, 0.03);
+}
+
+.event-item .item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.event-item .item-title {
+    font-weight: 700;
+    color: #212529;
+}
+
+.event-item .item-meta {
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+
+.event-item .item-details {
+    margin-top: 6px;
+    color: #6c757d;
+    font-size: 0.95rem;
+}
+
+/* si #events est une UL, garder la liste propre */
+#events ul,
+#events>ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+/* ----------------------------------------
+   End of file — ajoute, adapte, commite
+   ---------------------------------------- */

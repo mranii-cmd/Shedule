@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connexion - GestAd</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .login-container {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      padding: 3rem;
+      width: 100%;
+      max-width: 400px;
+    }
+    .login-header { text-align: center; margin-bottom: 2rem; }
+    .login-header h1 { margin: 0 0 0.5rem 0; color: #333; font-size: 2rem; }
+    .login-header p { margin: 0; color: #666; font-size: 0.875rem; }
+    .form-group { margin-bottom: 1.5rem; }
+    .form-group label { display: block; margin-bottom: 0.5rem; color: #333; font-weight: 500; }
+    .form-group input {
+      width: 100%;
+      padding: 0.875rem;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 1rem;
+      transition: all 0.2s;
+    }
+    .form-group input:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    .btn-login {
+      width: 100%;
+      padding: 1rem;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .btn-login:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3); }
+    .btn-login:active { transform: translateY(0); }
+    .btn-login:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    .error-message {
+      background: #ffebee;
+      color: #c62828;
+      padding: 0.875rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      display: none;
+      font-size: 0.875rem;
+    }
+    .demo-info {
+      margin-top: 2rem;
+      padding: 1rem;
+      background: #e3f2fd;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      color: #1565c0;
+    }
+    .demo-info strong { display: block; margin-bottom: 0.5rem; }
+    .demo-info code {
+      background: white;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="login-header">
+      <h1>🏢 GestAd</h1>
+      <p>Gestion Administrative</p>
+    </div>
+    
+    <div id="error-message" class="error-message"></div>
+    
+    <form id="login-form">
+      <div class="form-group">
+        <label for="username">Nom d'utilisateur</label>
+        <input 
+          type="text" 
+          id="username" 
+          name="username" 
+          placeholder="Entrez votre nom d'utilisateur"
+          required
+          autocomplete="username"
+        >
+      </div>
+      
+      <div class="form-group">
+        <label for="password">Mot de passe</label>
+        <input 
+          type="password" 
+          id="password" 
+          name="password" 
+          placeholder="Entrez votre mot de passe"
+          required
+          autocomplete="current-password"
+        >
+      </div>
+      
+      <button type="submit" class="btn-login" id="btn-login">
+        Se connecter
+      </button>
+    </form>
+    
+   <!--- <div class="demo-info">
+      <strong>💡 Compte de démonstration :</strong>
+      <div>👤 Utilisateur : <code>admin</code></div>
+      <div>🔑 Mot de passe : <code>admin</code></div>
+    </div>  -->
+  </div>
+
+  <script>
+    console.log('🔵 Page de connexion chargée');
+    
+    const API_BASE_URL = '/api';
+    
+    // Vérifier si déjà connecté
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      console.log('✅ Token trouvé, redirection vers /');
+      window.location.href = '/';
+    }
+    
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      console.log('🔵 Tentative de connexion...');
+      
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      const errorEl = document.getElementById('error-message');
+      const btnLogin = document.getElementById('btn-login');
+      
+      errorEl.style.display = 'none';
+      
+      if (!username || !password) {
+        showError('Veuillez remplir tous les champs');
+        return;
+      }
+      
+      btnLogin.disabled = true;
+      btnLogin.textContent = 'Connexion...';
+      
+      try {
+        console.log('🔐 Envoi pour:', username);
+        
+        const response = await fetch(API_BASE_URL + '/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        
+        console.log('📡 Status:', response.status);
+        
+        const data = await response.json();
+        console.log('📦 Data:', data);
+        
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || data.message || 'Erreur de connexion');
+        }
+        
+        if (data.token) {
+          localStorage.setItem('auth_token', data.token);
+          localStorage.setItem('user_data', JSON.stringify(data.user || { username }));
+          console.log('✅ Connexion réussie, redirection vers /');
+          window.location.href = '/';
+        }
+        
+      } catch (error) {
+        console.error('❌ Erreur:', error);
+        showError(error.message || 'Erreur de connexion. Vérifiez vos identifiants.');
+        btnLogin.disabled = false;
+        btnLogin.textContent = 'Se connecter';
+      }
+    });
+    
+    function showError(message) {
+      const errorEl = document.getElementById('error-message');
+      errorEl.textContent = '❌ ' + message;
+      errorEl.style.display = 'block';
+    }
+  </script>
+</body>
+</html>

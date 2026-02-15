@@ -1,0 +1,85 @@
+/* preview controls & layout fix */
+.preview-modal,
+#preview-modal {
+  z-index: 10000;
+}
+
+/* keep the header visible and above the canvas */
+.preview-header {
+  position: sticky;
+  top: 0;
+  z-index: 10010;
+  padding: 8px 12px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* light theme override example */
+.theme-light .preview-header {
+  background: rgba(255,255,255,0.95);
+  color: #111;
+}
+
+/* buttons in header */
+.preview-header .preview-btn,
+#pdf-page-prev,
+#pdf-page-next {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  z-index: 10011 !important;
+  color: #fff !important;
+  background: rgba(255,255,255,0.06) !important;
+  border: none !important;
+  padding: 6px 8px !important;
+  margin-left: 6px !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+}
+
+/* light-theme button overrides */
+.theme-light .preview-header .preview-btn,
+.theme-light #pdf-page-prev,
+.theme-light #pdf-page-next {
+  color: #111 !important;
+  background: rgba(0,0,0,0.05) !important;
+}
+
+/* ensure scrollable area places children at top and provides vertical scroll */
+.preview-viewer > div[style*="overflow"],
+.preview-viewer .preview-scrollable,
+.preview-viewer > .preview-scroll {
+  align-items: flex-start !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  width: 100% !important;
+  padding-top: 8px !important;
+}
+
+/* canvas sizing safety */
+#pdf-canvas {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+}
+/* compact page indicator in preview header */
+.preview-actions #pdf-page-indicator {
+  display: inline-block;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.06); /* adapte selon thème */
+  color: inherit;
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1;
+  margin: 0 6px;
+}
+.theme-light .preview-actions #pdf-page-indicator {
+  background: rgba(0,0,0,0.05);
+  color: #111;
+}
