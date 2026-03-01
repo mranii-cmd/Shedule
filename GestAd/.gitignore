@@ -37,6 +37,7 @@ Thumbs.db
 # Build
 dist/
 build/
+coverage/
 
 # Pasted files
 pasted*.txt
