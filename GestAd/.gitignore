@@ -8,17 +8,26 @@ yarn-error.log*
 logs/
 *.log
 
-# Environment
+# Environment files
 .env
 .env.local
 .env.*.local
+.envold
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
 
 # Uploads
 uploads/
-temp/
-
-# Backups
 backups/
+
+# Temporary files
+temp/
+*.tmp
+pasted*.txt
 
 # Database
 *.sqlite
@@ -26,7 +35,13 @@ backups/
 
 # OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+*~
 
 # IDE
 .vscode/
@@ -38,7 +53,8 @@ Thumbs.db
 dist/
 build/
 
-# Pasted files
-pasted*.txt
+# Docker
+docker-compose.override.yml
 
-.env .env* gestad-backup-*/
+# Backup archives
+gestad-backup-*/
