@@ -46,8 +46,10 @@ Thumbs.db
 *.swp
 *.swo
 
-# Docker
-docker-compose.override.yml
+# Build
+dist/
+build/
+coverage/
 
 # Docker
 docker-compose.override.yml
