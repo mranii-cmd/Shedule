@@ -1,6 +1,8 @@
 import express from 'express';
 import { createNotification } from '../utils/notifications.js';
 import { jwtAuth } from '../middleware/auth.js';
+import { validate, schemas } from '../middleware/validation.js';
+import logger from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -50,7 +52,7 @@ router.get('/', async (req, res, next) => {
 
     res.json(events);
   } catch (error) {
-    console.error('Error fetching events:', error);
+    logger.error('Error fetching events:', { error: error.message });
     next(error);
   }
 });
@@ -71,13 +73,13 @@ router.get('/:id', async (req, res, next) => {
 
     res.json(event);
   } catch (error) {
-    console.error('Error fetching event:', error);
+    logger.error('Error fetching event:', { error: error.message });
     next(error);
   }
 });
 
 // POST /api/events - Créer un événement
-router.post('/', jwtAuth, async (req, res, next) => {
+router.post('/', jwtAuth, validate(schemas.createEvent), async (req, res, next) => {
   try {
     const knex = req.app.get('knex');
     const {
@@ -120,7 +122,7 @@ router.post('/', jwtAuth, async (req, res, next) => {
       created_by: created_by || null
     };
 
-    console.log('Event data to insert:', eventData);
+    logger.debug('Event data to insert:', eventData);
 
     const [id] = await knex('events').insert(eventData);
     const event = await knex('events').where({ id }).first();
@@ -129,7 +131,7 @@ router.post('/', jwtAuth, async (req, res, next) => {
     const userId = created_by || req.user?.id || null; // adapte si besoin
     if (userId) {
       try {
-        console.log('>>> Création notification, options =', { eventId: id, read: false });
+        logger.debug('>>> Création notification, options =', { eventId: id, read: false });
         await createNotification(
           knex,
           userId,
@@ -139,21 +141,21 @@ router.post('/', jwtAuth, async (req, res, next) => {
           null,
           { eventId: id, read: false } // <= AJOUTE read: false
         );
-        console.log('Notification créée pour user', userId, 'event', id);
+        logger.debug('Notification créée pour user', userId, 'event', id);
       } catch (notifErr) {
-        console.warn('Erreur création notification événement:', notifErr);
+        logger.warn('Erreur création notification événement:', notifErr);
       }
     }
 
     res.status(201).json(event);
   } catch (error) {
-    console.error('Error creating event:', error);
+    logger.error('Error creating event:', { error: error.message });
     next(error);
   }
 });
 
 // PUT /api/events/:id - Mettre à jour un événement
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', validate(schemas.updateEvent), async (req, res, next) => {
   try {
     const knex = req.app.get('knex');
     const { id } = req.params;
@@ -197,7 +199,7 @@ router.put('/:id', async (req, res, next) => {
     const event = await knex('events').where({ id }).first();
     res.json(event);
   } catch (error) {
-    console.error('Error updating event:', error);
+    logger.error('Error updating event:', { error: error.message });
     next(error);
   }
 });
@@ -218,7 +220,7 @@ router.delete('/:id', async (req, res, next) => {
 
     res.status(204).send();
   } catch (error) {
-    console.error('Error deleting event:', error);
+    logger.error('Error deleting event:', { error: error.message });
     next(error);
   }
 });
