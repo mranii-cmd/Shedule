@@ -1,24 +1,44 @@
 # Dependencies
 node_modules/
 
+# Logs
+logs/
+*.log
+
 # Environment files
 .env
 .env.local
 .env.*.local
 .envold
 
-# Logs
-logs/
-*.log
-npm-debug.log*
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
 
 # Uploads
 uploads/
 backups/
 
+# Temporary files
+temp/
+*.tmp
+pasted*.txt
+
+# Database
+*.sqlite
+*.db
+
 # OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+*~
 
 # IDE
 .vscode/
@@ -29,6 +49,8 @@ Thumbs.db
 # Docker
 docker-compose.override.yml
 
-# Temporary files
-pasted*.txt
-*.tmp
+# Docker
+docker-compose.override.yml
+
+# Backup archives
+gestad-backup-*/
