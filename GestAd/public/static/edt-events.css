@@ -1,0 +1,336 @@
+/* EDT events — enhanced styles: title, forms, cards, badges */
+
+/* Design tokens */
+:root{
+  --edt-primary: #667eea;
+  --edt-accent: #764ba2;
+  --edt-muted: #6c757d;
+  --edt-card-bg: #fff;
+  --edt-radius: 12px;
+  --edt-gap: 12px;
+  --edt-shadow: 0 10px 28px rgba(16,24,40,0.08);
+  --edt-font-sans: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --edt-surface: #fbfdff;
+  --edt-input-bg: #ffffff;
+  --edt-input-border: #e6e9ef;
+}
+
+/* Page title (large & modern) */
+header h1 {
+  font-family: var(--edt-font-sans);
+  font-weight: 800;
+  font-size: 1.6rem;
+  margin: 0 0 .6rem 0;
+  background: linear-gradient(90deg,var(--edt-primary),var(--edt-accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.02em;
+  display: inline-block;
+}
+
+/* Subtitle (optional) */
+header .page-subtitle {
+  display:block;
+  color:var(--edt-muted);
+  margin-top:6px;
+  font-size:0.95rem;
+}
+
+/* Container for events and forms */
+.edt-layout {
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  gap: 18px;
+  align-items: start;
+}
+
+/* If small screens, single column */
+@media (max-width: 980px){
+  .edt-layout { grid-template-columns: 1fr; }
+}
+
+/* Left column (events) */
+.edt-events-root {
+  font-family: var(--edt-font-sans);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--edt-gap);
+  padding: 8px;
+}
+
+/* Right column (forms / summary panels) */
+.edt-side-panel {
+  background: var(--edt-surface);
+  border-radius: var(--edt-radius);
+  padding: 14px;
+  border: 1px solid #eef2f8;
+  box-shadow: 0 6px 20px rgba(16,24,40,0.04);
+}
+
+/* Card */
+.edt-event-card{
+  background: var(--edt-card-bg);
+  border-radius: 12px;
+  box-shadow: var(--edt-shadow);
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  align-items: stretch;
+  transition: transform .12s ease, box-shadow .12s ease;
+  min-height: 96px;
+  position: relative;
+  border: 1px solid rgba(16,24,40,0.03);
+}
+.edt-event-card:hover{
+  transform: translateY(-6px);
+  box-shadow: 0 18px 44px rgba(16,24,40,0.10);
+}
+
+/* date column */
+.edt-event-date{
+  width:78px;
+  min-width:78px;
+  text-align:center;
+  border-radius:10px;
+  padding:10px 6px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  background: linear-gradient(180deg, rgba(102,126,234,0.06), rgba(118,75,162,0.02));
+  flex-shrink: 0;
+}
+.edt-event-date .edt-day{
+  font-size:20px;
+  font-weight:800;
+  color: var(--edt-primary);
+}
+.edt-event-date .edt-month{
+  font-size:11px;
+  text-transform:uppercase;
+  color: var(--edt-muted);
+  letter-spacing:0.06em;
+}
+
+/* main column */
+.edt-event-main{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  flex:1;
+}
+.edt-event-title{
+  font-size:15px;
+  font-weight:800;
+  color:#0f1722;
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:start;
+}
+.edt-event-sub {
+  font-size:12px;
+  color:var(--edt-muted);
+  margin-top:0;
+}
+
+/* description */
+.edt-event-desc{
+  font-size:13px;
+  color:var(--edt-muted);
+  line-height:1.35;
+  max-height:3.2em;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+/* meta / badges row */
+.edt-event-meta{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  margin-top:auto;
+  flex-wrap:wrap;
+}
+.edt-badge{
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:12px;
+  background:#f3f4f6;
+  color:#374151;
+}
+
+/* time chip */
+.edt-time {
+  font-weight:700;
+  color:var(--edt-primary);
+  background: rgba(102,126,234,0.06);
+  padding:4px 8px;
+  border-radius:8px;
+  font-size:12px;
+}
+
+/* type color tags */
+.edt-type {
+  padding:5px 8px;
+  border-radius:8px;
+  color:white;
+  font-weight:700;
+  font-size:12px;
+}
+.edt-type.cours{ background: linear-gradient(90deg,#dc3545,#c82333); }
+.edt-type.td{ background: linear-gradient(90deg,#28a745,#20c997); }
+.edt-type.tp{ background: linear-gradient(90deg,#007bff,#0056b3); }
+.edt-type.other{ background: linear-gradient(90deg,var(--edt-primary),var(--edt-accent)); }
+
+/* creator chip (small avatar circle + name) */
+.edt-creator {
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  font-size:12px;
+  color:#334155;
+}
+.edt-avatar {
+  width:28px; height:28px; border-radius:50%;
+  background: linear-gradient(135deg, #eef2ff, #f5f0ff);
+  display:inline-flex; align-items:center; justify-content:center;
+  font-weight:700; color:var(--edt-primary); font-size:0.85rem;
+  border: 1px solid #e6e9ef;
+}
+
+/* actions (top-right) */
+.edt-actions {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display:flex;
+  gap:8px;
+}
+.edt-action-btn{
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding:6px;
+  border-radius:8px;
+}
+.edt-action-btn:hover{ background: rgba(0,0,0,0.04); }
+
+/* placeholder */
+.edt-empty {
+  padding: 28px;
+  text-align:center;
+  color: var(--edt-muted);
+  background: #fff;
+  border-radius: 8px;
+  border: 1px dashed #e9ecef;
+}
+
+/* Form & input styling (side panel) */
+.edt-side-panel h3 { margin-top:0; margin-bottom:10px; color:#0f1722; font-size:1.05rem; }
+.edt-side-panel label { display:block; font-size:0.9rem; color:var(--edt-muted); margin-top:10px; }
+.edt-input, .edt-textarea, .edt-select {
+  width:100%;
+  padding:10px 12px;
+  border:1px solid var(--edt-input-border);
+  border-radius:8px;
+  background:var(--edt-input-bg);
+  font-size:0.95rem;
+  color:#0f1722;
+}
+.edt-btn {
+  display:inline-block;
+  padding:10px 14px;
+  background: linear-gradient(90deg,var(--edt-primary),var(--edt-accent));
+  color:white;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+  font-weight:700;
+  margin-top:12px;
+}
+
+/* responsive */
+@media (max-width:640px){
+  .edt-event-date { width:64px; min-width:64px; }
+  .edt-event-card { min-height:78px; }
+}
+
+/* utilities */
+.hidden { display:none !important; }
+
+/* Ajoûter ces règles à la fin de /public/static/edt-events.css (ou styles.css) */
+/* Styles pour les icônes/actions dans les étiquettes d'événements */
+.event-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* bouton icône (petit, carré) */
+.btn-icon {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background .12s ease, transform .06s ease;
+  color: inherit;
+}
+
+/* couleurs distinctes pour actions */
+.btn-icon.event-open-btn {
+  color: #2853d1;
+  background: rgba(102,126,234,0.06);
+}
+.btn-icon.event-delete-btn {
+  color: #c92a2a;
+  background: rgba(220,53,69,0.06);
+}
+
+.btn-icon:hover {
+  transform: translateY(-1px);
+  filter: brightness(0.98);
+}
+
+/* size svg */
+.btn-icon svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+/* adapt: event item layout */
+.event-item .item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.event-item .item-title {
+  display: block;
+  font-weight: 700;
+  color: #111827;
+}
+
+.event-item .item-meta {
+  display: block;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+/* ensure list items spacing */
+.event-item { margin-bottom: 10px; }

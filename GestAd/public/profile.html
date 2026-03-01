@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mon Profil - GestAd</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>GestAd</h1>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="index.html" class="nav-item">
+                    <i class="fas fa-home"></i>
+                    <span>Accueil</span>
+                </a>
+                <a href="documents.html" class="nav-item">
+                    <i class="fas fa-file-alt"></i>
+                    <span>Documents</span>
+                </a>
+                <a href="calendar.html" class="nav-item">
+                    <i class="fas fa-calendar"></i>
+                    <span>Calendrier</span>
+                </a>
+                <a href="users.html" class="nav-item">
+                    <i class="fas fa-users"></i>
+                    <span>Utilisateurs</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <a href="profile.html" class="user-info" id="sidebarUserInfo" title="Mon profil">
+                    <i class="fas fa-user-circle"></i>
+                    <span>Chargement...</span>
+                </a>
+                <button class="btn btn-secondary btn-sm" onclick="logout()">
+                    <i class="fas fa-sign-out-alt"></i> Déconnexion
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="content-header">
+                <h1>
+                    <i class="fas fa-user-circle"></i>
+                    Mon Profil
+                </h1>
+            </header>
+
+            <!-- Profile Content -->
+            <div class="profile-container">
+                <!-- Avatar Section -->
+                <div class="profile-avatar-section card">
+                    <div class="avatar-container">
+                        <div id="avatarPreview" class="avatar-large">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div class="avatar-upload">
+                            <input type="file" id="avatarInput" accept="image/*" style="display: none;">
+                            <button class="btn btn-primary btn-sm" id="changeAvatarBtn" type="button"
+                                style="cursor: pointer;">
+                                <i class="fas fa-camera"></i> Changer l'avatar
+                            </button>
+                            <small class="text-muted">Max 5MB - JPG, PNG, GIF</small>
+                        </div>
+                    </div>
+
+                    <div class="profile-info">
+                        <h2 id="profileName">Chargement...</h2>
+                        <p id="profileUsername" class="text-muted">@username</p>
+                        <p id="profileRole" class="profile-role"></p>
+                    </div>
+                </div>
+
+                <!-- Profile Form -->
+                <div class="card">
+                    <h3><i class="fas fa-user-edit"></i> Informations Personnelles</h3>
+                    <form id="profileForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="first_name">Prénom</label>
+                                <input type="text" id="first_name" name="first_name">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="last_name">Nom</label>
+                                <input type="text" id="last_name" name="last_name">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="email">Email</label>
+                                <input type="email" id="email" name="email" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="phone">Téléphone</label>
+                                <input type="tel" id="phone" name="phone">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="bio">Biographie</label>
+                            <textarea id="bio" name="bio" rows="4"></textarea>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Enregistrer les modifications
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Password Change -->
+                <div class="card">
+                    <h3><i class="fas fa-lock"></i> Changer le Mot de Passe</h3>
+                    <form id="passwordForm">
+                        <div class="form-group">
+                            <label for="current_password">Mot de passe actuel</label>
+                            <input type="password" id="current_password" name="current_password" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="new_password">Nouveau mot de passe</label>
+                            <input type="password" id="new_password" name="new_password" minlength="6" required>
+                            <small class="form-hint">Minimum 6 caractères</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="confirm_password">Confirmer le nouveau mot de passe</label>
+                            <input type="password" id="confirm_password" name="confirm_password" minlength="6" required>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-key"></i> Changer le mot de passe
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Activity Log -->
+                <div class="card">
+                    <h3><i class="fas fa-history"></i> Activité Récente</h3>
+                    <div id="activityLog" class="activity-log">
+                        <div class="text-center">
+                            <i class="fas fa-spinner fa-spin"></i> Chargement...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/toast.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/profile.js"></script>
+</body>
+
+</html>

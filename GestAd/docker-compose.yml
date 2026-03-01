@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  db:
+    image: mariadb:10.6
+    container_name: gestad-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-verysecret}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-gestad}"
+      MYSQL_USER: "${MYSQL_USER:-gestad}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-gestadpwd}"
+    ports:
+      - "3307:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - gestad-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-verysecret}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  gestad:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gestad-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: "${NODE_ENV:-development}"
+      PORT: "${PORT:-3001}"
+      MYSQL_HOST: db
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-gestad}"
+      MYSQL_USER: "${MYSQL_USER:-gestad}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-gestadpwd}"
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./logs:/usr/src/app/logs
+      - ./uploads:/usr/src/app/uploads
+      - ./public:/usr/src/app/public        # ← Nouvelle ligne
+      - ./src:/usr/src/app/src              # ← Nouvelle ligne
+    networks:
+      - gestad-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  adminer:
+    image: adminer
+    container_name: gestad-adminer
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    networks:
+      - gestad-network
+    depends_on:
+      - db
+
+  backup:
+    image: mariadb:10.6
+    container_name: gestad-backup
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-gestad}"
+      MYSQL_USER: "${MYSQL_USER:-gestad}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-gestadpwd}"
+    volumes:
+      - ./backups:/backups
+    networks:
+      - gestad-network
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c 'while true; do
+        echo "[backup] $$(date) - running dump";
+        mysqldump -h db -u "$$MYSQL_USER" -p"$$MYSQL_PASSWORD" "$$MYSQL_DATABASE" > /backups/gestad_$$(date +%F_%T).sql 2>/backups/backup_err.log || echo backup failed >> /backups/backup_err.log;
+        find /backups -type f -name "gestad_*.sql" -mtime +30 -delete;
+        sleep 86400;
+      done'
+
+volumes:
+  db_data:
+    driver: local
+
+networks:
+  gestad-network:
+    driver: bridge

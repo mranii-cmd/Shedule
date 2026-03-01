@@ -1,0 +1,22 @@
+cd GestAd
+
+# Arrêter
+docker-compose down
+
+# Rebuild
+docker-compose build --no-cache
+
+# Démarrer
+docker-compose up -d
+
+# Attendre
+sleep 20
+
+# Vérifier les logs
+docker-compose logs --tail=30 gestad
+
+# Tester l'API
+echo "=== TEST API ==="
+curl http://localhost:3001/api/events
+
+# Devrait retourner du JSON, pas du HTML

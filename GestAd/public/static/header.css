@@ -1,0 +1,224 @@
+/* Header improvements: sticky, responsive, accessible */
+#appHeader {
+  position: sticky;
+  top: 0;
+  z-index: 1100;
+  background: #ffffff;
+  border-bottom: 1px solid #e6e9ee;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.02);
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  backdrop-filter: blur(4px);
+}
+
+#appHeader .left,
+#appHeader .center,
+#appHeader .right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#appHeader .left { min-width: 160px; }
+#appHeader .logo {
+  display:flex;align-items:center;gap:10px;font-weight:600;color:#111827;text-decoration:none;
+}
+#appHeader .logo img { height:36px; width:auto; display:block; }
+
+#appHeader .title {
+  font-size:1.05rem;
+  line-height:1;
+  color:#0f172a;
+}
+
+#appHeader .search {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex:1 1 320px;
+  max-width:720px;
+}
+#appHeader input[type="search"] {
+  width:100%;
+  padding:8px 10px;
+  border:1px solid #d1d5db;
+  border-radius:8px;
+  font-size:0.95rem;
+  background:#fff;
+  outline: none;
+}
+#appHeader input[type="search"]:focus {
+  border-color:#7c3aed;
+  box-shadow: 0 0 0 3px rgba(124,58,237,0.07);
+}
+
+#appHeader .filters {
+  display:flex;gap:8px;align-items:center;
+}
+#appHeader select {
+  padding:6px 8px;
+  border-radius:8px;
+  border:1px solid #d1d5db;
+  background:#fff;
+  font-size:0.9rem;
+}
+
+#appHeader .user {
+  display:flex;gap:10px;align-items:center;
+}
+#appHeader .user .username {
+  font-weight:600;color:#0f172a;
+}
+#appHeader .btn {
+  cursor:pointer;
+  padding:6px 10px;
+  border-radius:8px;
+  border:1px solid transparent;
+  background:#f3f4f6;
+  font-size:0.9rem;
+}
+#appHeader .btn.primary {
+  background:#7c3aed;color:white;border-color:#7c3aed;
+}
+@media (max-width:720px) {
+  #appHeader { padding:8px; gap:8px; }
+  #appHeader .left { min-width: 120px; }
+  #appHeader .search { flex-basis: 100%; max-width: none; }
+  #appHeader .center { order: 3; width:100%; }
+}
+#appHeader .right.user { margin-left: auto; display:flex; align-items:center; gap:8px; }
+#appHeader .username { margin-right:6px; font-weight:600; }
+/* Docs by-year groups */
+.docs-year-group {
+  background: #fff;
+  border: 1px solid #eef2f8;
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 12px;
+  box-shadow: 0 6px 18px rgba(16,24,40,0.04);
+}
+.docs-year-header {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  margin-bottom:8px;
+}
+.docs-year-title {
+  font-weight:700;
+  font-size:1.05rem;
+}
+.docs-year-count {
+  color:#6b7280;
+  font-size:0.95rem;
+}
+.docs-doc-cards {
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.docs-doc-card {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:10px;
+  border-radius:8px;
+  border:1px solid #f1f5f9;
+  background:linear-gradient(180deg,#ffffff,#fbfdff);
+}
+.docs-doc-card .left { min-width:0; flex:1; margin-right:12px; }
+.docs-doc-card .title { font-weight:700; display:block; margin-bottom:4px; }
+.docs-doc-card .meta { color:#6b7280; font-size:0.9rem; }
+.docs-doc-card .actions { display:flex; gap:8px; align-items:center; }
+@media (min-width:880px) {
+  .docs-doc-card { align-items:flex-start; }
+}
+/* Animation pour groups par année (slide + fade) */
+.docs-year-group {
+  overflow: visible;
+  transition: box-shadow .18s ease, transform .18s ease;
+}
+
+.docs-year-header {
+  cursor: pointer;
+  user-select: none;
+}
+
+/* zone qui sera animée : contenue interne (cards) */
+.docs-doc-cards {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 360ms cubic-bezier(.2,.8,.2,1), opacity 260ms ease;
+  will-change: max-height, opacity;
+}
+
+/* état ouvert */
+.docs-year-group.open .docs-doc-cards {
+  opacity: 1;
+  /* max-height sera fixé dynamiquement en JS à scrollHeight pour animation fluide */
+}
+
+/* petite mise en valeur de l'en-tête ouvert */
+.docs-year-group.open .docs-year-header {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 18px rgba(16,24,40,0.06);
+}
+
+/* animation d'entrée globale (fade/slide) pour tout le groupe au rendu initial */
+.docs-year-group.enter {
+  animation: groupFadeIn 260ms ease;
+}
+@keyframes groupFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* Ajoute ceci dans <head> ou header.css */
+.docs-year-group { margin-bottom:12px; border-radius:10px; background:#fff; border:1px solid #eef2f8; padding:10px; box-shadow:0 6px 18px rgba(16,24,40,0.03); }
+.docs-year-header { display:flex; justify-content:space-between; align-items:center; gap:12px; cursor:pointer; padding:6px 4px; }
+.docs-year-title { font-weight:700; }
+.docs-year-count { color:#6b7280; font-size:0.95rem; }
+
+.docs-doc-cards {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 360ms cubic-bezier(.2,.8,.2,1), opacity 260ms ease;
+  will-change: max-height, opacity;
+}
+
+/* état ouvert */
+.docs-year-group.open .docs-doc-cards {
+  opacity: 1;
+  /* max-height sera animé via JS en lui donnant scrollHeight */
+}
+
+/* entrée visuelle */
+.docs-year-group.enter { animation: groupFadeIn 260ms ease; }
+@keyframes groupFadeIn { from { opacity:0; transform: translateY(6px);} to { opacity:1; transform: translateY(0);} }
+
+.docs-doc-card { display:flex; justify-content:space-between; gap:12px; padding:10px; border-radius:8px; border:1px solid #f1f5f9; background:#fff; align-items:center; }
+.docs-doc-card .left { min-width:0; flex:1;}
+.docs-doc-card .title { font-weight:700; display:block; margin-bottom:4px; }
+.docs-doc-card .meta { color:#6b7280; font-size:0.9rem; }
+.docs-doc-card .actions { display:flex; gap:8px; align-items:center; }
+.docs-doc-cards {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 360ms cubic-bezier(.2,.8,.2,1), opacity 260ms ease;
+  will-change: max-height, opacity;
+}
+.docs-year-group.open .docs-doc-cards { opacity: 1; }
+/* Documents by-year boxes + animation */
+.docs-year-group { margin-bottom:12px; border-radius:8px; background:#fff; border:1px solid #eef2f8; padding:8px; box-shadow:0 6px 18px rgba(16,24,40,0.03); }
+.docs-year-header { display:flex; justify-content:space-between; align-items:center; gap:12px; cursor:pointer; padding:6px 8px; }
+.docs-year-title { font-weight:700; }
+.docs-year-count { color:#6b7280; font-size:0.95rem; }
+.docs-doc-cards { overflow:hidden; max-height:0; opacity:0; transition: max-height 360ms cubic-bezier(.2,.8,.2,1), opacity 260ms ease; will-change: max-height, opacity; }
+.docs-year-group.open .docs-doc-cards { opacity:1; }
+.docs-doc-card { display:flex; justify-content:space-between; gap:12px; padding:10px; border-radius:8px; border:1px solid #f1f5f9; background:#fff; align-items:center; margin-bottom:8px; }
