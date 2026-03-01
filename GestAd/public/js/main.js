@@ -1,42 +1,99 @@
-import { loadEvents } from './modules/events.js';
-import { toast } from './components/Toast.js';
+import authService from './services/AuthService.js';
+import eventBus from './core/EventBus.js';
+import toast from './components/UI/Toast.js';
 
-document.addEventListener('DOMContentLoaded', () => {
-  console.log('GestAd UI v2.0');
-  
-  setupTabs();
-  loadEvents();
-  toast.info('Bienvenue');
-});
+/**
+ * Point d'entrée principal de l'application
+ */
+class App {
+  constructor() {
+    this.init();
+  }
 
-function setupTabs() {
-  const tabs = document.querySelectorAll('.tab-btn');
-  
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      const panelId = tab.getAttribute('aria-controls');
-      switchTab(panelId);
+  /**
+   * Initialiser l'application
+   */
+  async init() {
+    console.log('🚀 GestAd Application Starting...');
+
+    // Vérifier l'authentification sur les pages protégées
+    if (!window.location.pathname.includes('login.html')) {
+      if (!authService.requireAuth()) {
+        return;
+      }
+
+      // Charger le profil utilisateur
+      try {
+        await authService.loadProfile();
+        this.setupGlobalEvents();
+        this.initModules();
+      } catch (error) {
+        console.error('Error loading profile:', error);
+        toast.error('Erreur de chargement du profil');
+      }
+    }
+
+    console.log('✅ GestAd Application Ready');
+  }
+
+  /**
+   * Configurer les événements globaux
+   */
+  setupGlobalEvents() {
+    // Écouter les erreurs API
+    eventBus.on('api:error', ({ error }) => {
+      console.error('API Error:', error);
+
+      if (error.status !== 401) { // 401 géré par AuthService
+        toast.error(error.message || 'Une erreur est survenue');
+      }
     });
-  });
-}
 
-function switchTab(panelId) {
-  document.querySelectorAll('[role="tabpanel"]').forEach(panel => {
-    panel.hidden = true;
-  });
-  
-  const activePanel = document.getElementById(panelId);
-  if (activePanel) {
-    activePanel.hidden = false;
-    
-    if (panelId === 'panel-events') {
-      loadEvents();
+    // Écouter les déconnexions
+    eventBus.on('auth:logout', () => {
+      toast.info('Vous avez été déconnecté');
+    });
+
+    // Bouton de déconnexion
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        authService.logout();
+      });
     }
   }
-  
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    const isActive = btn.getAttribute('aria-controls') === panelId;
-    btn.setAttribute('aria-selected', isActive);
-    btn.tabIndex = isActive ? 0 : -1;
-  });
+
+  /**
+   * Initialiser les modules selon la page
+   */
+  initModules() {
+    // Détecter la page actuelle et initialiser le module approprié
+    const path = window.location.pathname;
+
+    if (path.includes('events') || path === '/' || path === '/index.html') {
+      import('./modules/events/EventsManager.js').then(module => {
+        new module.default();
+      });
+    }
+
+    if (path.includes('documents')) {
+      import('./modules/documents/DocumentsManager.js').then(module => {
+        new module.default();
+      });
+    }
+
+    if (path.includes('profile')) {
+      import('./modules/profile/ProfileManager.js').then(module => {
+        new module.default();
+      });
+    }
+  }
+}
+
+// Démarrer l'application au chargement du DOM
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => new App());
+} else {
+  new App();
 }
