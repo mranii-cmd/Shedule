@@ -12,9 +12,9 @@ import eventsRouter from './routes/events.js';
 import authRouter from './routes/auth.js';
 import documentsRouter from './routes/documents.js';
 import resourcesRouter from './routes/resources-upload.js';
-import notificationsRouter from './routes/notifications.js';  // ✅ AJOUTÉ
-import tagsRouter from './routes/tags.js';                    // ✅ AJOUTÉ
-import favoritesRouter from './routes/favorites.js';          // ✅ AJOUTÉ
+import notificationsRouter from './routes/notifications.js';
+import tagsRouter from './routes/tags.js';
+import favoritesRouter from './routes/favorites.js';
 import usersRouter from './routes/users.js';
 import legislationRouter from './routes/legislation.js';
 
@@ -60,9 +60,9 @@ app.use('/api/auth', authRouter);
 app.use('/api/documents', documentsRouter);
 app.use('/api/legislation', legislationRouter);
 app.use('/api/resources', resourcesRouter);
-app.use('/api/notifications', notificationsRouter);  // ✅ AJOUTÉ
-app.use('/api/tags', tagsRouter);                    // ✅ AJOUTÉ
-app.use('/api/favorites', favoritesRouter);          // ✅ AJOUTÉ
+app.use('/api/notifications', notificationsRouter);
+app.use('/api/tags', tagsRouter);
+app.use('/api/favorites', favoritesRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/profile', profileRoutes);
 
