@@ -3,6 +3,8 @@ import multer from 'multer';
 import path from 'path';
 import bcrypt from 'bcryptjs';
 import { jwtAuth } from '../middleware/auth.js';
+import { validate, schemas } from '../middleware/validation.js';
+import logger from '../utils/logger.js';
 import getKnex from '../db/knex.js';
 
 const db = getKnex();
@@ -50,13 +52,13 @@ router.get('/', jwtAuth, async (req, res) => {
 
     res.json(user);
   } catch (error) {
-    console.error('Error fetching profile:', error);
+    logger.error('Error fetching profile:', { error: error.message });
     res.status(500).json({ message: 'Erreur lors de la récupération du profil' });
   }
 });
 
 // PUT /api/profile - Mettre à jour le profil
-router.put('/', jwtAuth, async (req, res) => {
+router.put('/', jwtAuth, validate(schemas.updateProfile), async (req, res) => {
   try {
     const { first_name, last_name, email, phone, bio } = req.body;
 
@@ -99,7 +101,7 @@ router.put('/', jwtAuth, async (req, res) => {
 
     res.json(updatedUser);
   } catch (error) {
-    console.error('Error updating profile:', error);
+    logger.error('Error updating profile:', { error: error.message });
     res.status(500).json({ message: 'Erreur lors de la mise à jour du profil' });
   }
 });
@@ -150,7 +152,7 @@ router.patch('/password', jwtAuth, async (req, res) => {
 
     res.json({ message: 'Mot de passe modifié avec succès' });
   } catch (error) {
-    console.error('Error changing password:', error);
+    logger.error('Error changing password:', { error: error.message });
     res.status(500).json({ message: 'Erreur lors du changement de mot de passe' });
   }
 });
@@ -182,7 +184,7 @@ router.post('/avatar', jwtAuth, upload.single('avatar'), async (req, res) => {
       avatar_url: avatarUrl
     });
   } catch (error) {
-    console.error('Error uploading avatar:', error);
+    logger.error('Error uploading avatar:', { error: error.message });
     res.status(500).json({ message: 'Erreur lors de l\'upload de l\'avatar' });
   }
 });
@@ -211,7 +213,7 @@ router.get('/activity', jwtAuth, async (req, res) => {
       offset
     });
   } catch (error) {
-    console.error('Error fetching activity:', error);
+    logger.error('Error fetching activity:', { error: error.message });
     res.status(500).json({ message: 'Erreur lors de la récupération de l\'activité' });
   }
 });

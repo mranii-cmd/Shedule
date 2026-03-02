@@ -1,4 +1,4 @@
-import logger from '../utils/logger.js';
+import { logger, logError } from './logger.js';
 
 export class AppError extends Error {
   constructor(message, statusCode = 500, code = 'internal_error') {
@@ -36,12 +36,7 @@ export class ForbiddenError extends AppError {
 }
 
 export function errorHandler(err, req, res, next) {
-  logger.error('Error caught', {
-    error: err.message,
-    stack: err.stack,
-    url: req.url,
-    method: req.method
-  });
+  logError(err, req);
 
   if (err.isOperational) {
     return res.status(err.statusCode).json({
@@ -58,10 +53,31 @@ export function errorHandler(err, req, res, next) {
     });
   }
 
+  if (err.name === 'JsonWebTokenError') {
+    return res.status(401).json({
+      error: 'invalid_token',
+      message: 'Token invalide'
+    });
+  }
+
+  if (err.name === 'TokenExpiredError') {
+    return res.status(401).json({
+      error: 'token_expired',
+      message: 'Token expiré'
+    });
+  }
+
   if (err.code === 'ER_DUP_ENTRY') {
     return res.status(409).json({
       error: 'duplicate_entry',
       message: 'Ressource existe déjà'
+    });
+  }
+
+  if (err.code === 'ER_NO_REFERENCED_ROW_2') {
+    return res.status(400).json({
+      error: 'invalid_reference',
+      message: 'Référence invalide'
     });
   }
 
@@ -75,5 +91,23 @@ export function notFoundHandler(req, res) {
   res.status(404).json({
     error: 'not_found',
     message: `Route ${req.method} ${req.url} non trouvée`
+  });
+}
+
+// Handler pour les erreurs non capturées
+export function setupUncaughtHandlers() {
+  process.on('uncaughtException', (error) => {
+    logger.error('Uncaught Exception', {
+      message: error.message,
+      stack: error.stack
+    });
+    process.exit(1);
+  });
+
+  process.on('unhandledRejection', (reason, promise) => {
+    logger.error('Unhandled Rejection', {
+      reason,
+      promise
+    });
   });
 }

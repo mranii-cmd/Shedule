@@ -1,11 +1,17 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import knex from 'knex';
 import knexConfig from './db/knexfile.js';
 import profileRoutes from './routes/profile.js';
+
+// Middlewares de sécurité
+import { authLimiter, apiLimiter, uploadLimiter } from './middleware/rateLimiter.js';
+import { logger, requestLogger } from './middleware/logger.js';
+import { errorHandler, notFoundHandler, setupUncaughtHandlers } from './middleware/errorHandler.js';
 
 // Import routes
 import eventsRouter from './routes/events.js';
@@ -26,22 +32,39 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Setup handlers pour les erreurs non capturées
+setupUncaughtHandlers();
+
 // Database
 const db = knex(knexConfig);
 app.set('knex', db);
 
-// Middleware
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"]
+    }
+  }
+}));
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// Logging middleware
-app.use((req, res, next) => {
-  console.log(`${req.method} ${req.url}`);
-  next();
-});
+// Body parsing
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Health check
+// Logging
+app.use(requestLogger);
+
+// Health check (pas de rate limit)
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -53,6 +76,12 @@ app.get('/health', (req, res) => {
     memory: process.memoryUsage()
   });
 });
+
+// Rate limiting par type de route
+app.use('/api/auth', authLimiter);
+app.use('/api/documents/upload', uploadLimiter);
+app.use('/api/resources/upload', uploadLimiter);
+app.use('/api', apiLimiter);
 
 // API Routes
 app.use('/api/events', eventsRouter);
@@ -75,37 +104,24 @@ app.get('/login.html', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/login.html'));
 });
 
-// Fallback pour SPA
-app.get('*', (req, res) => {
+// Fallback pour SPA (with rate limiting for file system access)
+app.get('*', apiLimiter, (req, res, next) => {
   if (req.path.startsWith('/api')) {
-    return res.status(404).json({ error: 'Route API non trouvée' });
+    return next(); // Passer au handler 404
   }
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
-// Error handler
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(err.status || 500).json({
-    error: err.name || 'internal_server_error',
-    message: err.message || 'An error occurred',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-  });
-});
+// Error handlers (doivent être en dernier)
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 // Start server
 app.listen(PORT, () => {
-  console.log('=============================================================');
-  console.log('✓ GestAd Server Started');
-  console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`✓ Port: ${PORT}`);
-  console.log(`✓ Health check: http://localhost:${PORT}/health`);
-  console.log(`✓ API Endpoints:`);
-  console.log(`  - http://localhost:${PORT}/api/events`);
-  console.log(`  - http://localhost:${PORT}/api/documents`);
-  console.log(`  - http://localhost:${PORT}/api/notifications`);
-  console.log(`  - http://localhost:${PORT}/api/tags`);
-  console.log(`  - http://localhost:${PORT}/api/favorites`);
-  console.log(`✓ Node version: ${process.version}`);
-  console.log('=============================================================');
+  logger.info('=============================================================');
+  logger.info('✓ GestAd Server Started');
+  logger.info(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
+  logger.info(`✓ Port: ${PORT}`);
+  logger.info(`✓ Node version: ${process.version}`);
+  logger.info('=============================================================');
 });

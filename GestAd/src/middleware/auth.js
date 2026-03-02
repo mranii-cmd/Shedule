@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { verifyToken } from '../auth/jwt.js';
 import knexConfig from '../db/knexfile.js';
 import knex from 'knex';
+import logger from '../utils/logger.js';
 
 const db = knex(knexConfig);
 
@@ -21,7 +22,7 @@ export async function jwtAuth(req, res, next) {
     req.user = { id: user.id, username: user.username, role: user.role || 'user' };
     next();
   } catch (err) {
-    console.error('jwtAuth', err.message);
+    logger.error('jwtAuth', { error: err.message });
     return res.status(401).json({ error: 'invalid token' });
   }
 }
