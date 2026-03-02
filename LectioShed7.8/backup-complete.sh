@@ -11,7 +11,7 @@ echo "Dossier:  $BACKUP_DIR"
 echo ""
 
 # Créer le dossier de backup
-mkdir -p "$BACKUP_DIR"
+mkdir -p "$BACKUP_DIR" || { echo "❌ Failed to create backup directory"; exit 1; }
 
 # =====================================
 # 1. SAUVEGARDER LES IMAGES DOCKER
@@ -19,25 +19,51 @@ mkdir -p "$BACKUP_DIR"
 echo "1️⃣ SAUVEGARDE DES IMAGES DOCKER"
 echo "--------------------------------"
 
+# Check if Docker is running
+if ! docker info > /dev/null 2>&1; then
+    echo "❌ Docker is not running or not accessible"
+    exit 1
+fi
+
 echo "📦 Export de l'image API..."
-docker save -o "$BACKUP_DIR/lectioshed-api.tar" lectioshed78-api
-SIZE_API=$(du -h "$BACKUP_DIR/lectioshed-api.tar" | cut -f1)
-echo "   ✅ lectioshed-api.tar ($SIZE_API)"
+if docker image inspect lectioshed78-api > /dev/null 2>&1; then
+    docker save -o "$BACKUP_DIR/lectioshed-api.tar" lectioshed78-api
+    SIZE_API=$(du -h "$BACKUP_DIR/lectioshed-api.tar" | cut -f1)
+    echo "   ✅ lectioshed-api.tar ($SIZE_API)"
+else
+    echo "   ⚠️ Image lectioshed78-api not found, skipping"
+    SIZE_API="N/A"
+fi
 
 echo "📦 Export de MySQL..."
-docker save -o "$BACKUP_DIR/mysql.tar" mysql:8.0
-SIZE_MYSQL=$(du -h "$BACKUP_DIR/mysql.tar" | cut -f1)
-echo "   ✅ mysql.tar ($SIZE_MYSQL)"
+if docker image inspect mysql:8.0 > /dev/null 2>&1; then
+    docker save -o "$BACKUP_DIR/mysql.tar" mysql:8.0
+    SIZE_MYSQL=$(du -h "$BACKUP_DIR/mysql.tar" | cut -f1)
+    echo "   ✅ mysql.tar ($SIZE_MYSQL)"
+else
+    echo "   ⚠️ MySQL image not found, skipping"
+    SIZE_MYSQL="N/A"
+fi
 
 echo "📦 Export de Nginx..."
-docker save -o "$BACKUP_DIR/nginx.tar" nginx:alpine
-SIZE_NGINX=$(du -h "$BACKUP_DIR/nginx.tar" | cut -f1)
-echo "   ✅ nginx.tar ($SIZE_NGINX)"
+if docker image inspect nginx:alpine > /dev/null 2>&1; then
+    docker save -o "$BACKUP_DIR/nginx.tar" nginx:alpine
+    SIZE_NGINX=$(du -h "$BACKUP_DIR/nginx.tar" | cut -f1)
+    echo "   ✅ nginx.tar ($SIZE_NGINX)"
+else
+    echo "   ⚠️ Nginx image not found, skipping"
+    SIZE_NGINX="N/A"
+fi
 
 echo "📦 Export de Adminer..."
-docker save -o "$BACKUP_DIR/adminer.tar" adminer:latest
-SIZE_ADMINER=$(du -h "$BACKUP_DIR/adminer.tar" | cut -f1)
-echo "   ✅ adminer. tar ($SIZE_ADMINER)"
+if docker image inspect adminer:latest > /dev/null 2>&1; then
+    docker save -o "$BACKUP_DIR/adminer.tar" adminer:latest
+    SIZE_ADMINER=$(du -h "$BACKUP_DIR/adminer.tar" | cut -f1)
+    echo "   ✅ adminer.tar ($SIZE_ADMINER)"
+else
+    echo "   ⚠️ Adminer image not found, skipping"
+    SIZE_ADMINER="N/A"
+fi
 
 echo ""
 
@@ -55,15 +81,26 @@ fi
 
 echo "   Volume: $VOLUME_NAME"
 
-# Créer un conteneur temporaire pour accéder au volume
-docker run --rm \
-    -v "$VOLUME_NAME":/data \
-    -v "$(pwd)/$BACKUP_DIR":/backup \
-    alpine \
-    tar czf /backup/mysql-volume.tar.gz -C /data .
-
-SIZE_VOL=$(du -h "$BACKUP_DIR/mysql-volume.tar.gz" | cut -f1)
-echo "   ✅ mysql-volume.tar.gz ($SIZE_VOL)"
+# Check if volume exists
+if docker volume inspect "$VOLUME_NAME" > /dev/null 2>&1; then
+    # Créer un conteneur temporaire pour accéder au volume
+    docker run --rm \
+        -v "$VOLUME_NAME":/data \
+        -v "$(pwd)/$BACKUP_DIR":/backup \
+        alpine \
+        tar czf /backup/mysql-volume.tar.gz -C /data . 2>/dev/null || {
+        echo "   ⚠️ Failed to backup volume, continuing..."
+        SIZE_VOL="N/A"
+    }
+    
+    if [ -f "$BACKUP_DIR/mysql-volume.tar.gz" ]; then
+        SIZE_VOL=$(du -h "$BACKUP_DIR/mysql-volume.tar.gz" | cut -f1)
+        echo "   ✅ mysql-volume.tar.gz ($SIZE_VOL)"
+    fi
+else
+    echo "   ⚠️ Volume $VOLUME_NAME does not exist"
+    SIZE_VOL="N/A"
+fi
 echo ""
 
 # =====================================
@@ -73,17 +110,21 @@ echo "3️⃣ DUMP DE LA BASE DE DONNÉES"
 echo "------------------------------"
 
 if docker ps | grep -q mysql-edt; then
-    docker exec mysql-edt mysqldump -u root -pS@mya2598 \
+    if docker exec mysql-edt mysqldump -u root -pS@mya2598 \
         --all-databases \
         --routines \
         --triggers \
         --single-transaction \
-        > "$BACKUP_DIR/database-dump.sql" 2>/dev/null
-    
-    SIZE_SQL=$(du -h "$BACKUP_DIR/database-dump.sql" | cut -f1)
-    echo "   ✅ database-dump. sql ($SIZE_SQL)"
+        > "$BACKUP_DIR/database-dump.sql" 2>/dev/null; then
+        SIZE_SQL=$(du -h "$BACKUP_DIR/database-dump.sql" | cut -f1)
+        echo "   ✅ database-dump.sql ($SIZE_SQL)"
+    else
+        echo "   ⚠️ Database dump failed"
+        SIZE_SQL="N/A"
+    fi
 else
-    echo "   ⚠️ MySQL non démarré, skip"
+    echo "   ⚠️ MySQL container 'mysql-edt' not running, skip"
+    SIZE_SQL="N/A"
 fi
 echo ""
 

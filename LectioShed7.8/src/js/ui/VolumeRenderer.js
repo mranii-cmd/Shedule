@@ -15,6 +15,7 @@ import { safeText } from '../utils/sanitizers.js';
 import SchedulingService from '../services/SchedulingService.js';
 import { normalizeSessionLabel, getStorageSessionKey } from '../utils/session.js';
 import { attachIndicator } from '../ui/indicators.js';
+import { filterSubjectsByDepartment } from '../utils/helpers.js';
 
 class VolumeRenderer {
     constructor() {
@@ -639,6 +640,10 @@ class VolumeRenderer {
     renderSubjectVolumes() {
         const subjects = SubjectController.getAllSubjectsWithStats() || [];
         const filieres = StateManager.state.filieres || [];
+        
+        // Filtrer par département
+        const departement = StateManager.state?.header?.departement || '';
+        const subjectsFilteredByDept = filterSubjectsByDepartment(subjects, departement);
 
         const headerSessionRaw = (StateManager.state && StateManager.state.header && StateManager.state.header.session) ? StateManager.state.header.session : '';
         const normalized = normalizeSessionLabel(headerSessionRaw); // 'autumn'|'spring'|'unknown'
@@ -647,10 +652,10 @@ class VolumeRenderer {
         else if (normalized === 'spring') sessionLabelHuman = 'Printemps';
 
         // If session unknown -> show all subjects (but put a note)
-        let subjectsToShow = subjects;
+        let subjectsToShow = subjectsFilteredByDept;
         let noteHtml = '';
         if (!sessionLabelHuman) {
-            noteHtml = `<div class="subjects-note">Session non définie — affichage de toutes les matières</div>`;
+            noteHtml = `<div class="subjects-note">Session non définie — affichage de toutes les matières${departement && departement !== 'Administration' ? ` (département: ${safeText(departement)})` : ''}</div>`;
         } else {
             // collect filiere names for this session
             const filieresForSession = filieres
@@ -662,19 +667,19 @@ class VolumeRenderer {
                 return `
                     <div class="subject-volumes">
                         <h3>📚 Volumes Horaires par Matière (session courante)</h3>
-                        <div class="empty-message">Aucune filière configurée pour la session ${safeText(sessionLabelHuman)}.</div>
+                        <div class="empty-message">Aucune filière configurée pour la session ${safeText(sessionLabelHuman)}${departement && departement !== 'Administration' ? ` (département: ${safeText(departement)})` : ''}.</div>
                     </div>
                 `;
             }
 
             // filter subjects by their configured filiere (support multiple storage shapes)
-            subjectsToShow = subjects.filter(s => {
+            subjectsToShow = subjectsFilteredByDept.filter(s => {
                 const cfgFiliere = (s.config && s.config.filiere) ? String(s.config.filiere).trim()
                     : (StateManager.state.matiereGroupes && StateManager.state.matiereGroupes[s.nom] ? StateManager.state.matiereGroupes[s.nom].filiere : '');
                 return cfgFiliere && filieresForSession.includes(cfgFiliere);
             });
 
-            noteHtml = `<div class="subjects-note">Matières pour la session ${safeText(sessionLabelHuman)}</div>`;
+            noteHtml = `<div class="subjects-note">Matières pour la session ${safeText(sessionLabelHuman)}${departement && departement !== 'Administration' ? ` — Département: ${safeText(departement)}` : ''}</div>`;
         }
 
         // Sort by VHT desc

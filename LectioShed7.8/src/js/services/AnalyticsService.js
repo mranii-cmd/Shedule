@@ -410,6 +410,7 @@ class AnalyticsService {
             return {
                 nom,
                 filiere: config.filiere,
+                departement: config.departement,
                 totalSeances: matiereSeances.length,
                 cours,
                 td,

@@ -8,6 +8,7 @@ import SubjectController from '../controllers/SubjectController.js';
 import TeacherController from '../controllers/TeacherController.js';
 import RoomController from '../controllers/RoomController.js';
 import { safeText } from '../utils/sanitizers.js';
+import { filterSubjectsByDepartment, filterSubjectNamesByDepartment } from '../utils/helpers.js';
 // import { escapeHTML } from '../utils/sanitizers.js';
 
 class StatsRenderer {
@@ -51,15 +52,22 @@ class StatsRenderer {
     renderOverview() {
         const seances = StateManager.getSeances();
         const enseignants = StateManager.state.enseignants;
-        const matieres = Object.keys(StateManager.state.matiereGroupes);
+        const departement = StateManager.state?.header?.departement || '';
+        
+        // Filtrer les matières par département en utilisant la fonction helper
+        const allMatieres = Object.keys(StateManager.state.matiereGroupes);
+        const matieres = filterSubjectNamesByDepartment(allMatieres, departement, StateManager.state.matiereGroupes);
+        
         const salles = Object.keys(StateManager.state.sallesInfo);
 
         const seancesWithTeacher = seances.filter(s => s.hasTeacher()).length;
         const seancesWithRoom = seances.filter(s => s.hasRoom()).length;
+        
+        const deptNote = departement && departement !== 'Administration' ? ` (${safeText(departement)})` : '';
 
         return `
             <div class="overview-section">
-                <h3>📈 Vue d'Ensemble</h3>
+                <h3>📈 Vue d'Ensemble${deptNote}</h3>
                 <div class="overview-grid">
                     <div class="overview-card">
                         <div class="card-icon">📅</div>
@@ -80,7 +88,7 @@ class StatsRenderer {
                         <div class="card-icon">📚</div>
                         <div class="card-content">
                             <div class="card-value">${matieres.length}</div>
-                            <div class="card-label">Matières</div>
+                            <div class="card-label">Matières${deptNote}</div>
                         </div>
                     </div>
                     <div class="overview-card">
@@ -249,11 +257,21 @@ class StatsRenderer {
      * @returns {string} HTML
      */
     renderTopStats() {
+        const departement = StateManager.state?.header?.departement || '';
+        
         const teachers = TeacherController.getAllTeachersWithStats()
             .sort((a, b) => b.stats.totalSeances - a.stats.totalSeances)
             .slice(0, 5);
 
-        const subjects = SubjectController.getAllSubjectsWithStats()
+        // Filtrer les matières par département
+        let subjects = SubjectController.getAllSubjectsWithStats();
+        if (departement && departement !== 'Administration') {
+            subjects = subjects.filter(s => {
+                const subjectDept = s.departement || s.config?.departement || '';
+                return subjectDept === departement;
+            });
+        }
+        subjects = subjects
             .sort((a, b) => b.stats.totalSeances - a.stats.totalSeances)
             .slice(0, 5);
 
@@ -263,7 +281,7 @@ class StatsRenderer {
 
         return `
             <div class="top-stats-section">
-                <h3>🏆 Top 5</h3>
+                <h3>🏆 Top 5${departement && departement !== 'Administration' ? ` (${safeText(departement)})` : ''}</h3>
                 <div class="top-stats-grid">
                     <div class="top-list">
                         <h4>Enseignants (séances)</h4>
