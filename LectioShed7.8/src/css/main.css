@@ -3328,4 +3328,78 @@ select.teacher-highlight {
 .cell-details-item strong {
     color: #667eea;
 }
+/* ----- Volumes UI improvements (pagination, search, per-page) ----- */
+
+.subject-header, .teacher-header {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  margin-bottom:8px;
+}
+.subject-controls, .teacher-controls {
+  display:flex;
+  gap:8px;
+  align-items:center;
+}
+.stats-search {
+  padding:8px 10px;
+  border-radius:6px;
+  border:1px solid #d1d5db;
+  min-width:200px;
+}
+.per-page-label { display:flex; align-items:center; gap:6px; font-size:13px; color:#444; }
+.per-page-select { padding:6px 8px; border-radius:6px; border:1px solid #d1d5db; }
+
+/* table reuse */
+.volumes-table {
+  width:100%;
+  border-collapse: collapse;
+  background:#fff;
+  border:1px solid #e6e9ef;
+  border-radius:8px;
+  overflow:hidden;
+  margin-bottom:12px;
+}
+.volumes-table th, .volumes-table td {
+  padding:10px;
+  text-align:left;
+  border-bottom:1px solid #f3f4f6;
+  font-size:13px;
+}
+.volumes-table thead th { background:#fafafa; font-weight:600; color:#333; }
+.volumes-table tbody tr:hover { background:#fbfdff; }
+
+/* progress */
+.tvp-progress-wrapper { display:inline-flex; align-items:center; }
+.tvp-progress-bar { border-radius:8px; overflow:hidden; background:#e9ecef; height:14px; width:84px; position:relative; display:inline-block; }
+.tvp-progress-fill { position:absolute; left:0; top:0; bottom:0; background:#28a745; transition:width .35s; }
+
+/* pagination */
+.pagination-row, .pagination-row .stats-pager, .stats-pager {
+  margin-top:8px;
+  display:flex;
+  gap:6px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+.pager-btn {
+  background:#fff;
+  border:1px solid #e6e9ef;
+  padding:6px 10px;
+  border-radius:6px;
+  cursor:pointer;
+  font-weight:600;
+}
+.pager-btn:hover:not(:disabled) { background:#f7f9ff; }
+.pager-btn.active { background:#4338ca; color:#fff; border-color:#4338ca; }
+.pager-btn:disabled { opacity:0.45; cursor:not-allowed; }
+
+/* small responsive tweaks */
+@media (max-width: 800px) {
+  .subject-header, .teacher-header { flex-direction:column; align-items:flex-start; gap:8px; }
+  .stats-search { min-width:140px; }
+}
+
+/* ----- End Volumes UI improvements ----- */
 /* End of main.css */

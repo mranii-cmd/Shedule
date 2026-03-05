@@ -221,8 +221,10 @@ class ScheduleOptimizerService {
             if (!validation.valid) {
                 this._log('error', '[ScheduleOptimizer] Validation failed:', validation.errors);
             }
-            
+
             // 8. Construction du résultat
+            // Note: _buildResult historically returned success:true unconditionally.
+            // We build the result then attach validation info and set success based on validation.
             const result = this._buildResult(
                 snapshot.seances,
                 optimizedSeances,
@@ -231,6 +233,22 @@ class ScheduleOptimizerService {
                 opts,
                 validation
             );
+
+            // Attach validation metadata and defensive success flag
+            try {
+                result.validation = validation;
+                // If validation failed, mark success = false and provide a short debug snippet
+                if (!validation.valid) {
+                    result.success = false;
+                    result.error = result.error || 'Validation failed after optimization';
+                    result.debug = Object.assign({}, result.debug || {}, { validationErrors: validation.errors.slice(0, 20) });
+                } else {
+                    result.success = true;
+                }
+            } catch (e) {
+                // never let debug metadata break the result
+                this._log('debug', 'Failed to attach validation metadata', e);
+            }
             
             if (opts.dryRun) {
                 this._log('info', '[ScheduleOptimizer] Dry-run completed, no state changed.');
@@ -239,7 +257,38 @@ class ScheduleOptimizerService {
             }
             
             return result;
-            
+              // --- DEBUG: expose result in browser for easier debugging (dev only) ---
+            try {
+                if (typeof window !== 'undefined') {
+                    // shallow-safe stringify: replace functions with marker
+                    try {
+                        window.__lastOptimizationResult = JSON.parse(JSON.stringify(result, (k, v) => {
+                            if (typeof v === 'function') return '[Function]';
+                            return v;
+                        }));
+                    } catch (e) {
+                        // fallback: store a minimal summary if full stringify fails
+                        window.__lastOptimizationResult = {
+                            success: !!(result && result.success),
+                            error: result && (result.error || result.message),
+                            validation: result && result.validation,
+                            optimizedSeancesLength: Array.isArray(result && result.optimizedSeances) ? result.optimizedSeances.length : null
+                        };
+                    }
+                    window.__lastOptimizationResultAt = new Date().toISOString();
+                }
+            } catch (e) {
+                this._log('debug', 'Failed to set window.__lastOptimizationResult', e);
+            }
+
+            // If validation failed, log the validation errors for easier diagnosis
+            try {
+                if (result && result.validation && Array.isArray(result.validation.errors) && result.validation.errors.length) {
+                    this._log('error', '[ScheduleOptimizer] Validation errors:', result.validation.errors.slice(0, 20));
+                }
+            } catch (e) { /* ignore */ }
+
+            return result;
         } catch (err) {
             this._log('error', '[ScheduleOptimizer] Optimization failed:', err);
             return {
@@ -1845,9 +1894,16 @@ class ScheduleOptimizerService {
     }
 
     _timeToMinutes(time) {
-        if (!time) return 0;
-        const [h, m] = time.split(': ').map(Number);
-        return (h || 0) * 60 + (m || 0);
+       if (!time) return 0;
+        try {
+            const parts = String(time).split(':');
+            const h = Number(parts[0]) || 0;
+            const m = Number(parts[1]) || 0;
+            return h * 60 + m;
+        } catch (e) {
+            // defensif : si parsing échoue, retourne 0
+            return 0;
+        }
     }
 
     _minutesToTime(minutes) {
@@ -1921,14 +1977,37 @@ class ScheduleOptimizerService {
      * Génère un rapport HTML
      */
     generateOptimizationReport(result) {
-        if (!result?.success) {
+        // Defensive: if result is falsy, return a clear message and log for debug
+        if (!result) {
+            try { console.warn('[ScheduleOptimizerService] generateOptimizationReport called with falsy result:', result); } catch (e) { /* noop */ }
+            return '<div class="alert alert-danger">❌ Aucun résultat d\'optimisation disponible</div>';
+        }
+
+        // Consider the result usable either when success=true or when optimizedSeances is present
+        const hasOptimizedSeances = Array.isArray(result.optimizedSeances) && result.optimizedSeances.length > 0;
+        const ok = !!result.success || hasOptimizedSeances;
+        if (!ok) {
             return '<div class="alert alert-danger">❌ Échec de l\'optimisation</div>';
         }
 
-        const { currentStats, optimizedStats, improvement } = result;
+        // Use safe defaults to avoid runtime errors when some stats are missing
+        const currentStats = result.currentStats || {};
+        const optimizedStats = result.optimizedStats || {};
+        const improvement = result.improvement || {};
 
+        const safeNumber = (v) => Number.isFinite(v) ? v : 0;
         const fmt = (n) => Number.isFinite(n) ? n.toFixed(1) : '0.0';
         const pct = (n) => Number.isFinite(n) ? (n * 100).toFixed(1) + '%' : '0%';
+
+        const beforeConflicts = safeNumber((currentStats.conflicts && currentStats.conflicts.total) || 0);
+        const afterConflicts = safeNumber((optimizedStats.conflicts && optimizedStats.conflicts.total) || 0);
+        const beforeGaps = Array.isArray(currentStats.gaps) ? currentStats.gaps.length : 0;
+        const afterGaps = Array.isArray(optimizedStats.gaps) ? optimizedStats.gaps.length : 0;
+        const beforeClustering = Number.isFinite(currentStats.subjectClustering) ? currentStats.subjectClustering : 0;
+        const afterClustering = Number.isFinite(optimizedStats.subjectClustering) ? optimizedStats.subjectClustering : 0;
+        const impConflicts = safeNumber(improvement.conflicts || (beforeConflicts - afterConflicts));
+        const impGaps = safeNumber(improvement.gaps || (beforeGaps - afterGaps));
+        const impClustering = (typeof improvement.clustering === 'number') ? improvement.clustering : (afterClustering - beforeClustering);
 
         return `
 <div class="optimization-report">
@@ -1936,35 +2015,42 @@ class ScheduleOptimizerService {
     
     <div class="metric">
         <h4>Conflits</h4>
-        <span class="before">${currentStats.conflicts.total}</span>
+        <span class="before">${beforeConflicts}</span>
         <span class="arrow">→</span>
-        <span class="after">${optimizedStats.conflicts.total}</span>
-        <span class="improvement ${improvement.conflicts > 0 ? 'positive' : 'negative'}">
-            (${improvement.conflicts > 0 ? '-' : '+'}${Math.abs(improvement.conflicts)})
+        <span class="after">${afterConflicts}</span>
+        <span class="improvement ${impConflicts > 0 ? 'positive' : 'negative'}">
+            (${impConflicts > 0 ? '-' : '+'}${Math.abs(impConflicts)})
         </span>
     </div>
     
     <div class="metric">
         <h4>Trous</h4>
-        <span class="before">${currentStats.gaps.length}</span>
+        <span class="before">${beforeGaps}</span>
         <span class="arrow">→</span>
-        <span class="after">${optimizedStats.gaps.length}</span>
-        <span class="improvement ${improvement.gaps > 0 ? 'positive' : 'negative'}">
-            (${improvement.gaps > 0 ? '-' : '+'}${Math.abs(improvement.gaps)})
+        <span class="after">${afterGaps}</span>
+        <span class="improvement ${impGaps > 0 ? 'positive' : 'negative'}">
+            (${impGaps > 0 ? '-' : '+'}${Math.abs(impGaps)})
         </span>
     </div>
     
     <div class="metric">
         <h4>Regroupement matières</h4>
-        <span class="before">${pct(currentStats.subjectClustering)}</span>
+        <span class="before">${pct(beforeClustering)}</span>
         <span class="arrow">→</span>
-        <span class="after">${pct(optimizedStats.subjectClustering)}</span>
-        <span class="improvement ${improvement.clustering >= 0 ? 'positive' : 'negative'}">
-            (${improvement.clustering >= 0 ? '+' : ''}${pct(improvement.clustering)})
+        <span class="after">${pct(afterClustering)}</span>
+        <span class="improvement ${impClustering >= 0 ? 'positive' : 'negative'}">
+            (${impClustering >= 0 ? '+' : ''}${pct(impClustering)})
         </span>
     </div>
 </div>`;
     }
 }
 
-export default new ScheduleOptimizerService();
+const __scheduleOptimizerInstance = new ScheduleOptimizerService();
+// DEBUG: exposer l'instance pour debug dans le navigateur (ne pas laisser en production si non désiré)
+try {
+    if (typeof window !== 'undefined' && !window.ScheduleOptimizerService) {
+        window.ScheduleOptimizerService = __scheduleOptimizerInstance;
+    }
+} catch (e) { /* ignore non-browser env */ }
+export default __scheduleOptimizerInstance;

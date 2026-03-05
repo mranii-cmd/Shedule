@@ -13,6 +13,7 @@ import VolumeService from './VolumeService.js';
 import StorageService from './StorageService.js';
 import { SEANCE_COLORS } from '../config/constants.js';
 import { downloadFile } from '../utils/helpers.js';
+import { getEtablissement, drawPdfHeader, sanitizeFileName } from '../utils/pdfUtils.js';
 
 class ExportService {
     /**
@@ -39,10 +40,34 @@ class ExportService {
 
             let currentY = 10;
 
-            // En-tête
+            // En-tête : titre principal + ligne info compacte (même rendu que pour l'export enseignants)
             if (includeHeader) {
-                // currentY = this.addPDFHeader(doc, currentY);
-                currentY = this.addPDFHeader(doc, currentY, filter);
+                try {
+                    const pageWidth = doc.internal.pageSize.getWidth();
+                    // Title line (centered, bold)
+                    doc.setFontSize(16);
+                    try { doc.setFont(undefined, 'bold'); } catch (e) { /* noop */ }
+                    doc.text('Emploi du Temps', pageWidth / 2, currentY, { align: 'center' });
+                    currentY += 10;
+
+                    // Determine filière to show (only when filter represents a filière)
+                    const filiereToShow = (filter && filter !== 'global' && filter !== 'all') ? filter : null;
+
+                    // Draw single-line info (etablissement, filière, département, année, session) centered
+                    const headerInfo = drawPdfHeader(doc, {
+                        margin: currentY,
+                        includeSession: true,
+                        compact: true,
+                        filiere: filiereToShow,
+                        includeEtablissementLabel: false,
+                        align: 'center'
+                    });
+
+                    currentY = currentY + (headerInfo && headerInfo.height ? headerInfo.height + 6 : 18);
+                } catch (e) {
+                    // Fallback to previous multi-line header if anything fails
+                    try { currentY = this.addPDFHeader(doc, currentY, filter); } catch (ee) { currentY = currentY + 25; }
+                }
             }
 
             // Tableau EDT
@@ -54,8 +79,18 @@ class ExportService {
             }
 
             // Sauvegarder
-            const filename = this.generateFilename('edt', 'pdf');
-            doc.save(filename);
+            try {
+                const etab = getEtablissement();
+                const { session } = (StateManager.state && StateManager.state.header) || {};
+                const date = new Date().toISOString().slice(0, 10);
+                const sessionSlug = (session || '').toString().replace(/\s+/g, '_').toLowerCase() || 'session';
+                const fileEtab = etab ? `_${sanitizeFileName(etab)}` : '';
+                const filename = `edt_${sessionSlug}_${date}${fileEtab}.pdf`;
+                doc.save(filename);
+            } catch (e) {
+                const filename = this.generateFilename('edt', 'pdf');
+                doc.save(filename);
+            }
 
             return true;
         } catch (error) {
@@ -99,6 +134,10 @@ class ExportService {
 
     /**
      * Ajoute le tableau EDT au PDF
+     * Modification : rendu global EDT avec fond blanc pour les cellules,
+     * cadrillage visible, et coloration de l'en-tête (créneaux) et de la première colonne (jours).
+     * Ne touche pas au rendu des EDT enseignants.
+     *
      * @param {Object} doc - Document jsPDF
      * @param {number} startY - Position Y de départ
      * @param {string} filter - Filtre appliqué
@@ -109,16 +148,33 @@ class ExportService {
         const seances = TableRenderer.getFilteredSeances();
         const pdfData = TableRenderer.generatePDFData(seances);
 
-        // Utiliser autoTable
+        // Colors for header timeslots and day column
+        const headerTimeslotColor = [41, 128, 185]; // blue for timeslot header
+        const headerTimeslotTextColor = [255, 255, 255]; // header text white
+        const dayColumnColor = [236, 240, 241]; // light gray for day column
+        const dayColumnTextColor = [0, 0, 0];
+
+        // Use autoTable with grid theme and explicit cell styling:
         doc.autoTable({
             head: pdfData.head,
             body: pdfData.body.map(row => {
                 return row.map(cell => {
                     if (Array.isArray(cell)) {
-                        // C'est une cellule avec des séances
-                        return cell.map(s =>
-                            `${s.matiere} (${s.type})\n${s.groupe}\n${s.enseignant || 'N/A'}\n${s.salle || 'N/A'}`
-                        ).join('\n---\n');
+                        // Cell contains sessions — omit room for TP sessions
+                        return cell.map(s => {
+                            const typeText = s.type || '';
+                            const isTP = String(typeText).toLowerCase().includes('tp');
+                            const lines = [];
+                            // Matière + (type)
+                            lines.push(`${s.matiere || ''}${typeText ? ` (${typeText})` : ''}`.trim());
+                            // Groupe
+                            if (s.groupe) lines.push(String(s.groupe));
+                            // Enseignant
+                            if (s.enseignant) lines.push(String(s.enseignant));
+                            // Salle : only when not TP
+                            if (!isTP) lines.push(s.salle || s.salleName || 'N/A');
+                            return lines.filter(Boolean).join('\n');
+                        }).join('\n---\n');
                     }
                     return cell;
                 });
@@ -130,29 +186,53 @@ class ExportService {
                 cellPadding: 2,
                 overflow: 'linebreak',
                 halign: 'center',
-                valign: 'middle'
+                valign: 'middle',
+                // grid line appearance
+                lineColor: [160, 160, 160],
+                lineWidth: 0.12
             },
+            // default headStyles (will be enforced per-cell in didParseCell)
             headStyles: {
-                fillColor: [41, 128, 185],
-                textColor: 255,
+                fillColor: headerTimeslotColor,
+                textColor: headerTimeslotTextColor,
                 fontStyle: 'bold',
                 halign: 'center'
             },
             columnStyles: {
-                0: { fontStyle: 'bold', fillColor: [236, 240, 241] }
+                // first column default; didParseCell will ensure correct values too
+                0: { fontStyle: 'bold', fillColor: dayColumnColor }
             },
             didParseCell: (data) => {
-                // Colorer les cellules selon le type de séance
-                if (data.section === 'body' && data.column.index > 0) {
-                    const cellValue = data.cell.text.join('');
+                if (!(data && data.cell && data.cell.styles)) return;
 
-                    if (cellValue.includes('(Cours)')) {
-                        data.cell.styles.fillColor = SEANCE_COLORS.Cours.bg;
-                    } else if (cellValue.includes('(TD)')) {
-                        data.cell.styles.fillColor = SEANCE_COLORS.TD.bg;
-                    } else if (cellValue.includes('(TP)')) {
-                        data.cell.styles.fillColor = SEANCE_COLORS.TP.bg;
+                // Head row (timeslot labels)
+                if (data.section === 'head') {
+                    data.cell.styles.fillColor = headerTimeslotColor;
+                    data.cell.styles.textColor = headerTimeslotTextColor;
+                    data.cell.styles.fontStyle = 'bold';
+                    data.cell.styles.lineColor = [160, 160, 160];
+                    data.cell.styles.lineWidth = 0.12;
+                    return;
+                }
+
+                // Body rows
+                if (data.section === 'body') {
+                    // First column = day name -> apply day color
+                    if (data.column.index === 0) {
+                        data.cell.styles.fillColor = dayColumnColor;
+                        data.cell.styles.textColor = dayColumnTextColor;
+                        data.cell.styles.fontStyle = 'bold';
+                        data.cell.styles.lineColor = [160, 160, 160];
+                        data.cell.styles.lineWidth = 0.12;
+                        return;
                     }
+
+                    // Other cells -> enforce white background and grid lines
+                    data.cell.styles.fillColor = [255, 255, 255];
+                    data.cell.styles.textColor = [0, 0, 0];
+                    data.cell.styles.lineColor = [160, 160, 160];
+                    data.cell.styles.lineWidth = 0.12;
+                    return;
                 }
             }
         });
@@ -265,43 +345,226 @@ class ExportService {
      * Exporte les volumes horaires en Excel
      * @returns {Promise<boolean>} Succès de l'export
      */
+    // Remplacez uniquement la méthode exportVolumesToExcel dans ExportService.js par ce bloc
     async exportVolumesToExcel() {
         try {
             const workbook = XLSX.utils.book_new();
 
-            // Calculer les volumes
-            const seances = StateManager.getSeances();
-            const enseignants = StateManager.state.enseignants;
+            // Liste des enseignants (peut contenir des objets ou des strings)
+            const enseignantsRaw = Array.isArray(StateManager.state.enseignants) ? StateManager.state.enseignants : [];
+            const teacherDisplayName = (t) => {
+                if (t === null || t === undefined) return '';
+                if (typeof t === 'string') return t;
+                if (typeof t === 'object') return (t.nom || t.name || t.label || t.id || '').toString();
+                return String(t);
+            };
+            const teachers = enseignantsRaw.map(teacherDisplayName).filter(t => t && t.trim());
 
-            const volumes = VolumeService.calculateAllVolumes(
-                enseignants,
-                seances,
-                StateManager.state.enseignantVolumesSupplementaires,
-                StateManager.state.header.session,
-                StateManager.state.volumesAutomne
-            );
+            // Récupérer toutes les séances
+            const allSeances = (typeof StateManager.getSeances === 'function') ? StateManager.getSeances() : [];
 
-            // Préparer les données
-            const data = [
-                ['Volumes Horaires par Enseignant'],
-                [''],
-                ['Enseignant', 'Volume (hTP)']
+            // Déterminer la session courante (texte dans l'entête)
+            const currentSessionLabel = (StateManager.state && StateManager.state.header && StateManager.state.header.session)
+                ? String(StateManager.state.header.session).toLowerCase()
+                : '';
+
+            // Filtrer les séances pour la session courante (si possible) sinon utiliser toutes
+            const sessionSeances = (allSeances || []).filter(s => {
+                if (!s) return false;
+                if (!currentSessionLabel) return true; // si pas de label, conserver tout
+                try {
+                    const candidates = [s.session, s.season, s.saison, s.sessionLabel, s.term, s.sessionName];
+                    for (const c of candidates) {
+                        if (!c) continue;
+                        if (String(c).toLowerCase().includes(currentSessionLabel)) return true;
+                    }
+                } catch (e) { /* ignore */ }
+                return false;
+            });
+            const targetSeances = sessionSeances.length > 0 ? sessionSeances : allSeances;
+
+            // Helpers durée
+            const creneauxData = (StateManager.state && StateManager.state.creneaux) ? StateManager.state.creneaux : {};
+            const parseTimeToMinutes = (timeStr) => {
+                if (!timeStr || typeof timeStr !== 'string') return null;
+                const m = timeStr.match(/(\d{1,2}):(\d{2})/);
+                if (!m) return null;
+                return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+            };
+            const durationFromCreneau = (s) => {
+                try {
+                    const key = s && (s.creneau ?? s.slot ?? s.timeslot);
+                    if (!key) return null;
+                    const info = creneauxData[key] || {};
+                    const start = info.debut || info.start || info.heureDebut || info.from || info.startTime;
+                    const end = info.fin || info.end || info.heureFin || info.to || info.endTime;
+                    const sm = parseTimeToMinutes(start);
+                    const em = parseTimeToMinutes(end);
+                    if (sm != null && em != null && em > sm) return (em - sm) / 60;
+                } catch (e) { /* ignore */ }
+                return null;
+            };
+            const normalizeHours = (s) => {
+                if (!s || typeof s !== 'object') return 0;
+                const fields = ['heures', 'hours', 'duration', 'duree', 'h', 'volume', 'hoursCount', 'nb_heures'];
+                for (const f of fields) {
+                    if (typeof s[f] !== 'undefined' && s[f] !== null && s[f] !== '') {
+                        const n = Number(s[f]);
+                        if (!isNaN(n) && n >= 0) return n;
+                    }
+                }
+                if (s.start && s.end) {
+                    const sm = parseTimeToMinutes(String(s.start));
+                    const em = parseTimeToMinutes(String(s.end));
+                    if (sm != null && em != null && em > sm) return (em - sm) / 60;
+                }
+                const fromC = durationFromCreneau(s);
+                if (fromC != null) return fromC;
+                return 1; // fallback
+            };
+
+            // Helper détection enseignant (normalisation)
+            const normalizeTeacherString = (v) => {
+                if (v === undefined || v === null) return '';
+                if (typeof v === 'string') return v.trim().toLowerCase();
+                if (typeof v === 'object') return (v.nom || v.name || v.label || v.id || '').toString().trim().toLowerCase();
+                return String(v).trim().toLowerCase();
+            };
+            const hasTeacher = (s, teacherName) => {
+                if (!s) return false;
+                const key = (teacherName || '').toString().trim().toLowerCase();
+                if (!key) return false;
+                try {
+                    if (typeof s.hasTeacherAssigned === 'function') {
+                        try { if (s.hasTeacherAssigned(teacherName)) return true; } catch (e) { /* fallback */ }
+                    }
+                    const candidates = s.enseignantsArray ?? s.enseignants ?? s.teachers ?? s.teacher ?? s.enseignant ?? null;
+                    if (Array.isArray(candidates)) {
+                        return candidates.some(t => normalizeTeacherString(t) === key);
+                    }
+                    if (candidates) {
+                        return normalizeTeacherString(candidates) === key;
+                    }
+                    // fallback: try some likely fields
+                    for (const f of ['enseignants', 'enseignantsArray', 'teacher', 'teachers', 'enseignant']) {
+                        if (s[f]) {
+                            const v = s[f];
+                            if (Array.isArray(v)) {
+                                if (v.some(t => normalizeTeacherString(t) === key)) return true;
+                            } else {
+                                if (normalizeTeacherString(v) === key) return true;
+                            }
+                        }
+                    }
+                } catch (e) { return false; }
+                return false;
+            };
+
+            // Obtenir totals officiels (comme dans original)
+            let officialTotals = {};
+            try {
+                if (typeof VolumeService.calculateAllVolumes === 'function') {
+                    officialTotals = VolumeService.calculateAllVolumes(
+                        enseignantsRaw,
+                        allSeances,
+                        StateManager.state.enseignantVolumesSupplementaires,
+                        StateManager.state.header ? StateManager.state.header.session : undefined,
+                        StateManager.state.volumesAutomne
+                    ) || {};
+                }
+            } catch (e) {
+                console.warn('ExportService: calculateAllVolumes failed', e);
+                officialTotals = {};
+            }
+
+            // Construire les données détaillées (Cours/TD/TP) pour la session courante
+            const header = [
+                `Volumes détaillés - ${StateManager.state && StateManager.state.header ? (StateManager.state.header.session || 'session') : 'session'}`,
             ];
+            const data = [header, [''], ['Enseignant', 'Cours (h)', 'TD (h)', 'TP (h)', 'Total calculé (h)', 'Total officiel (h)']];
 
-            enseignants.forEach(ens => {
-                data.push([ens, volumes[ens] || 0]);
+            // Si la liste teachers est vide, extraire depuis les séances
+            const teacherList = teachers.length > 0 ? teachers : (() => {
+                const set = new Set();
+                (allSeances || []).forEach(s => {
+                    const cand = s && (s.enseignantsArray ?? s.enseignants ?? s.teachers ?? s.teacher ?? s.enseignant);
+                    if (!cand) return;
+                    if (Array.isArray(cand)) cand.forEach(c => set.add((c && (c.nom || c.name)) ? (c.nom || c.name) : c));
+                    else set.add((cand && (cand.nom || cand.name)) ? (cand.nom || cand.name) : cand);
+                });
+                return Array.from(set).map(x => x && x.toString()).filter(Boolean);
+            })();
+
+            teacherList.forEach(ens => {
+                const ensKey = ens || '';
+                let coursH = 0, tdH = 0, tpH = 0;
+
+                (targetSeances || []).forEach(s => {
+                    if (!hasTeacher(s, ensKey)) return;
+                    const h = Number(normalizeHours(s) || 0);
+                    const t = (s.type || '').toString().trim().toLowerCase();
+                    if (t.includes('cours') || t === 'cm' || t.includes('lecture') || t.includes('course')) {
+                        coursH += h;
+                    } else if (t.includes('td')) {
+                        tdH += h;
+                    } else if (t.includes('tp')) {
+                        tpH += h;
+                    } else {
+                        // essayer deviner par texte
+                        const txt = `${s.type || ''} ${s.matiere || ''}`.toLowerCase();
+                        if (txt.includes('td')) tdH += h;
+                        else if (txt.includes('tp')) tpH += h;
+                        else coursH += h;
+                    }
+                });
+
+                const totalCalc = Math.round((coursH + tdH + tpH) * 100) / 100;
+                const totalOff = Number(officialTotals[ens] || 0);
+
+                data.push([
+                    ensKey || '-',
+                    Math.round(coursH * 100) / 100,
+                    Math.round(tdH * 100) / 100,
+                    Math.round(tpH * 100) / 100,
+                    totalCalc,
+                    totalOff
+                ]);
             });
 
+            // Totaux globaux
+            const totals = data.slice(3).reduce((acc, row) => {
+                acc.cours += Number(row[1] || 0);
+                acc.td += Number(row[2] || 0);
+                acc.tp += Number(row[3] || 0);
+                acc.calc += Number(row[4] || 0);
+                acc.off += Number(row[5] || 0);
+                return acc;
+            }, { cours: 0, td: 0, tp: 0, calc: 0, off: 0 });
+
+            data.push([]);
+            data.push([
+                'Totaux',
+                Math.round(totals.cours * 100) / 100,
+                Math.round(totals.td * 100) / 100,
+                Math.round(totals.tp * 100) / 100,
+                Math.round(totals.calc * 100) / 100,
+                Math.round(totals.off * 100) / 100
+            ]);
+
             const worksheet = XLSX.utils.aoa_to_sheet(data);
+            worksheet['!cols'] = [{ wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 14 }];
             XLSX.utils.book_append_sheet(workbook, worksheet, 'Volumes');
 
             // Sauvegarder
-            const filename = this.generateFilename('volumes', 'xlsx');
+            const filename = this.generateFilename('volumes_detailles', 'xlsx');
             XLSX.writeFile(workbook, filename);
+
+            // debug
+            console.debug('ExportService: exported detailed volumes for session:', currentSessionLabel || 'all');
 
             return true;
         } catch (error) {
-            console.error('Erreur export volumes:', error);
+            console.error('Erreur export volumes détaillés:', error);
             return false;
         }
     }
@@ -353,8 +616,16 @@ class ExportService {
             }
 
             // Sauvegarder
-            const filename = `edt_enseignants_${new Date().toISOString().slice(0, 10)}.pdf`;
-            doc.save(filename);
+            try {
+                const etab = getEtablissement();
+                const date = new Date().toISOString().slice(0, 10);
+                const fileEtab = etab ? `_${sanitizeFileName(etab)}` : '';
+                const filename = `edt_enseignants_${date}${fileEtab}.pdf`;
+                doc.save(filename);
+            } catch (e) {
+                const filename = `edt_enseignants_${new Date().toISOString().slice(0, 10)}.pdf`;
+                doc.save(filename);
+            }
 
             LogService.success(`✅ Export PDF de ${enseignants.length} emploi(s) du temps réussi`);
             NotificationManager.success(`${enseignants.length} emploi(s) du temps exporté(s)`);
@@ -375,7 +646,8 @@ class ExportService {
      * @param {Array} allSeances - Toutes les séances
      */
     async generateTeacherSchedulePage(doc, enseignant, allSeances) {
-        const { annee, session, departement } = StateManager.state.header;
+        const { annee, session, departement } = StateManager.state.header || {};
+        const etab = getEtablissement();
 
         // Filtrer les séances de cet enseignant
         // const seancesEnseignant = allSeances.filter(s => s.hasTeacherAssigned(enseignant));
@@ -425,14 +697,24 @@ class ExportService {
                 return false;
             }
         });
-        // En-tête
+        // En-tête (inclure établissement si présent)
         doc.setFontSize(16);
         doc.setFont(undefined, 'bold');
         doc.text(`Emploi du Temps - ${enseignant}`, 148, 15, { align: 'center' });
 
         doc.setFontSize(11);
         doc.setFont(undefined, 'normal');
-        doc.text(`${departement} | ${annee} | ${session}`, 148, 22, { align: 'center' });
+        try {
+            const infoParts = [];
+            if (etab) infoParts.push(etab);
+            if (departement) infoParts.push(departement);
+            if (annee) infoParts.push(annee);
+            if (session) infoParts.push(session);
+            const infoText = infoParts.join(' | ');
+            if (infoText) doc.text(infoText, 148, 22, { align: 'center' });
+        } catch (e) {
+            try { doc.text(`${departement} | ${annee} | ${session}`, 148, 22, { align: 'center' }); } catch (ee) { /* noop */ }
+        }
 
         // Informations de volume horaire
         let currentY = 30;
@@ -770,7 +1052,14 @@ class ExportService {
                 const seance = seances.find(s => s.jour === jour && s.creneau === creneau);
 
                 if (seance) {
-                    const text = `${seance.matiere}\n(${seance.type})\n${seance.groupe}\n${seance.salle || 'N/A'}`;
+                    const typeText = seance.type || '';
+                    const isTP = String(typeText).toLowerCase().includes('tp');
+                    const parts = [];
+                    parts.push(seance.matiere || '');
+                    parts.push(`(${typeText})`);
+                    if (seance.groupe) parts.push(seance.groupe);
+                    if (!isTP) parts.push(seance.salle || 'N/A');
+                    const text = parts.filter(Boolean).join('\n');
                     row.push(text);
                 } else {
                     row.push('');
@@ -897,25 +1186,20 @@ class ExportService {
                 doc.text('Emploi du Temps des Examens', pdfWidth / 2, y, { align: 'center' });
                 y += 8;
 
-                const { annee, session, departement } = StateManager.state.header || {};
-                if (departement || annee || session) {
+                // Header info: afficher l'établissement (à la place du département), l'année et la session.
+                const { annee, session } = StateManager.state.header || {};
+                const etab = getEtablissement();
+                if (etab || annee || session) {
                     doc.setFontSize(11);
                     doc.setFont('helvetica', 'normal');
-                    const info = [departement, annee, session].filter(Boolean).join(' | ');
+                    const info = [etab, annee, session].filter(Boolean).join(' | ');
                     doc.text(info, pdfWidth / 2, y, { align: 'center' });
                     y += 6;
                 }
 
-                doc.setFontSize(9);
+                // Ne plus afficher la date de génération ici (supprimée par demande).
                 const now = new Date();
-                const dateStr = now.toLocaleDateString('fr-FR', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
-                doc.text(`Généré le ${dateStr}`, pdfWidth / 2, y, { align: 'center' });
+                // conserver l'espacement réservé précédemment
                 y += 10;
 
                 // ✅ Préparer les données (SANS examen et SANS total étudiants)
@@ -1029,7 +1313,16 @@ class ExportService {
                 }
 
                 const filename = `emploi-du-temps-examens-${now.toISOString().split('T')[0]}.pdf`;
-                doc.save(filename);
+                try {
+                    const etab = getEtablissement();
+                    const dateKey = now.toISOString().split('T')[0];
+                    const fileEtab = etab ? `_${sanitizeFileName(etab)}` : '';
+                    const filename = `emploi-du-temps-examens-${dateKey}${fileEtab}.pdf`;
+                    doc.save(filename);
+                } catch (e) {
+                    const filename = `emploi-du-temps-examens-${now.toISOString().split('T')[0]}.pdf`;
+                    doc.save(filename);
+                }
 
                 this.hideLoadingMessage(loadingMsg);
 

@@ -102,35 +102,48 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) { /* noop */ }
 
     const invokeExportEDT = async (view) => {
-      console.debug('[panexam.js] invokeExportEDT view=', view);
+      const targetView = (typeof view === 'string' && view) ? view : 'global';
+      console.debug('[panexam.js] invokeExportEDT view=', targetView);
       try {
-        // Prefer explicit API for EDT view
-        if (typeof ExportService !== 'undefined' && ExportService) {
-          if (typeof ExportService.exportEDTView === 'function') { await ExportService.exportEDTView(view); return; }
-          if (typeof ExportService.exportEDT === 'function') { await ExportService.exportEDT(view); return; }
-        }
-        if (window.ExportService) {
-          if (typeof window.ExportService.exportEDTView === 'function') { await window.ExportService.exportEDTView(view); return; }
-          if (typeof window.ExportService.exportEDT === 'function') { await window.ExportService.exportEDT(view); return; }
-        }
+        // Prefer direct ExportService.exportToPDF API when available
+        try {
+          if (ExportService && typeof ExportService.exportToPDF === 'function') {
+            await ExportService.exportToPDF({ filter: targetView });
+            return;
+          }
+        } catch (e) { /* noop - try other fallbacks */ }
+
+        // window global fallback
+        try {
+          if (window.ExportService && typeof window.ExportService.exportToPDF === 'function') {
+            await window.ExportService.exportToPDF({ filter: targetView });
+            return;
+          }
+        } catch (e) { /* noop */ }
+
         // dynamic import fallback
         try {
           const mod = await import('/src/js/services/ExportService.js');
           const S = mod && (mod.default || mod);
-          if (S && typeof S.exportEDTView === 'function') { await S.exportEDTView(view); return; }
-          if (S && typeof S.exportEDT === 'function') { await S.exportEDT(view); return; }
-        } catch (impErr) { console.warn('[panexam.js] dynamic import (exportEDTView) failed', impErr); }
+          if (S && typeof S.exportToPDF === 'function') {
+            await S.exportToPDF({ filter: targetView });
+            return;
+          }
+        } catch (impErr) {
+          console.warn('[panexam.js] dynamic import (exportToPDF) failed', impErr);
+        }
 
-        // fallback event for other modules
+        // event fallback for other modules to catch and handle
         try {
-          window.dispatchEvent(new CustomEvent('panexam:export-edt-requested', { detail: { view }, bubbles: true }));
+          window.dispatchEvent(new CustomEvent('panexam:export-edt-requested', { detail: { view: targetView }, bubbles: true }));
           return;
         } catch (evErr) { /* noop */ }
 
-        alert('Aucun ExportService disponible pour exporter la vue EDT.');
+        // final user-visible fallback
+        alert('Aucun service d\'export disponible pour générer l\'EDT en PDF.');
       } catch (err) {
         console.error('[panexam.js] invokeExportEDT error', err);
-        alert('Erreur lors de l\'export EDT : ' + (err && err.message));
+        try { alert('Erreur lors de l\'export EDT : ' + (err && (err.message || String(err)))); } catch (e) { /* noop */ }
       }
     };
 
@@ -235,11 +248,11 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
           btn.addEventListener('click', async function examExportHandler(e) {
             // Ensure this handler runs exclusively for this click
-            try { if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation(); } catch (_) {}
-            try { if (typeof e.stopPropagation === 'function') e.stopPropagation(); } catch (_) {}
-            try { if (typeof e.preventDefault === 'function') e.preventDefault(); } catch (_) {}
+            try { if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation(); } catch (_) { }
+            try { if (typeof e.stopPropagation === 'function') e.stopPropagation(); } catch (_) { }
+            try { if (typeof e.preventDefault === 'function') e.preventDefault(); } catch (_) { }
 
-            console.debug('[panexam.js] exam export button clicked ->', btn, 'text=', (btn.textContent||'').trim());
+            console.debug('[panexam.js] exam export button clicked ->', btn, 'text=', (btn.textContent || '').trim());
             try {
               await invokeExportExamTimetable();
             } catch (err) {
@@ -286,9 +299,9 @@ document.addEventListener('DOMContentLoaded', () => {
                       const txt = (el.textContent || el.innerText || '').trim();
                       if (txt && examTextRegex.test(txt)) added.push(el);
                       else if (el.id === 'btnExportExamTimetablePDF' || el.dataset && (el.dataset.action && /export-exam/i.test(el.dataset.action))) added.push(el);
-                    } catch (inner) {}
+                    } catch (inner) { }
                   });
-                } catch (_) {}
+                } catch (_) { }
               });
               if (added.length) {
                 // attach to unique ones
@@ -299,7 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         mo.observe(observeTarget, { childList: true, subtree: true });
         // store observer to potentially disconnect later if needed
-        try { window._panexam_exam_export_observer = mo; } catch (_) {}
+        try { window._panexam_exam_export_observer = mo; } catch (_) { }
       } catch (e) {
         console.warn('[panexam.js] MutationObserver for exam export buttons failed', e);
       }

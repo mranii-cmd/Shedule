@@ -11,6 +11,7 @@ import VolumeService from '../services/VolumeService.js';
 // import { escapeHTML } from '../utils/sanitizers.js';
 import VolumeRenderer from '../ui/VolumeRenderer.js';
 import { attachIndicator } from '../ui/indicators.js';
+import { filterSubjectsByDepartment } from '../utils/helpers.js';
 
 class DashboardRenderer {
     constructor() {
@@ -301,6 +302,10 @@ class DashboardRenderer {
             return '';
         }
 
+        // Filtrer par département avant tout traitement
+        const departement = StateManager.state?.header?.departement || '';
+        const filteredByDept = filterSubjectsByDepartment(subjectStats, departement);
+
         // déterminer la session et les séances correspondantes
         const seancesSession = this.getSessionSeances();
 
@@ -315,13 +320,13 @@ class DashboardRenderer {
 
         if (subjectNamesInSession.size > 0) {
             // filtrer subjectStats pour ne garder que les matières présentes dans la session
-            filteredStats = subjectStats.filter(s => subjectNamesInSession.has(String(s.nom || '').trim()));
+            filteredStats = filteredByDept.filter(s => subjectNamesInSession.has(String(s.nom || '').trim()));
         } else {
             // fallback : utiliser les filières de la session pour lister les matières rattachées aux filières
             const filieresNames = this.getSessionFilieresNames();
 
             if (filieresNames.length > 0) {
-                filteredStats = subjectStats.filter(s => {
+                filteredStats = filteredByDept.filter(s => {
                     const filiere = (s.filiere || (s.config && s.config.filiere) || '').toString().trim();
                     return filiere && filieresNames.includes(filiere);
                 });
@@ -331,7 +336,7 @@ class DashboardRenderer {
                 const inferredNames = new Set(
                     allSeances.map(s => (s.matiere || s.subject || s.nom || '').toString().trim()).filter(Boolean)
                 );
-                filteredStats = subjectStats.filter(s => inferredNames.has(String(s.nom || '').trim()));
+                filteredStats = filteredByDept.filter(s => inferredNames.has(String(s.nom || '').trim()));
             }
         }
 
@@ -339,7 +344,7 @@ class DashboardRenderer {
             return `
                 <div class="subject-stats-section">
                     <h3>📚 Statistiques par Matière — Session courante</h3>
-                    <p>Aucune matière planifiée pour la session courante ou données introuvables.</p>
+                    <p>Aucune matière planifiée pour la session courante ou données introuvables${departement && departement !== 'Administration' ? ` (département: ${safeText(departement)})` : ''}.</p>
                 </div>
             `;
         }
@@ -545,114 +550,99 @@ class DashboardRenderer {
             return out;
         };
 
-        // Prefer imported VolumeRenderer, fallback to window.VolumeRenderer (if exposed)
+        let annualRaw = {};
+        let usedSource = null;
+
+        // Prefer explicit API on VolumeRenderer if available (reliable, aggregating all pages)
         const VR = (typeof VolumeRenderer !== 'undefined' && VolumeRenderer) ? VolumeRenderer
             : (typeof window !== 'undefined' && window.VolumeRenderer) ? window.VolumeRenderer
                 : null;
 
-        let annualRaw = {};
-        let usedSource = null;
-
-        // Helper: detect aggregate/summary map (not per-teacher) by presence of known global keys
-        const looksLikeAggregate = (obj) => {
-            if (!obj || typeof obj !== 'object') return false;
-            const keys = Object.keys(obj).map(k => String(k).toLowerCase());
-            const aggregates = ['autumn', 'spring', 'annualvht', 'annualvhm', 'totalregisteredteachers', 'total', 'global', 'summary'];
-            return keys.some(k => aggregates.includes(k));
-        };
-
-        // Helper: try to extract numeric value from an object/value
-        const tryExtractNumericValue = (v) => {
-            if (v == null) return null;
-            if (typeof v === 'number' && !isNaN(v)) return Number(v);
-            if (typeof v === 'string' && v.trim() !== '' && !isNaN(Number(v))) return Number(v);
-            if (typeof v === 'object') {
-                // preferred keys
-                const cand = ['total', 'annual', 'volume', 'h', 'htp', 'hours', 'value', 'v', 'hTP', 'enseignement', 'forfait'];
-                for (let p of cand) {
-                    if (v[p] !== undefined && !isNaN(Number(v[p]))) return Number(v[p]);
-                }
-                // fallback: any numeric child
-                for (let k in v) {
-                    const c = v[k];
-                    if (typeof c === 'number' && !isNaN(c)) return Number(c);
-                    if (typeof c === 'string' && c.trim() !== '' && !isNaN(Number(c))) return Number(c);
-                }
-            }
-            return null;
-        };
-
-        // DFS to find a candidate map of name->number (heuristic)
-        const findTeacherMapDeep = (root) => {
-            const visited = new WeakSet();
-            let best = { map: null, score: 0, path: '' };
-
-            const scoreNode = (node) => {
-                if (!node || typeof node !== 'object') return 0;
-                let numericCount = 0;
-                let totalCount = 0;
-                for (let k of Object.keys(node)) {
-                    totalCount++;
-                    try {
-                        const v = node[k];
-                        const val = tryExtractNumericValue(v);
-                        if (val !== null) numericCount++;
-                        else {
-                            // if v is object, maybe nested teacher object => check children lightly
-                            if (v && typeof v === 'object') {
-                                const childNumeric = Object.keys(v).some(c => tryExtractNumericValue(v[c]) !== null);
-                                if (childNumeric) numericCount++;
-                            }
-                        }
-                    } catch (e) { }
-                }
-                // score: numericCount weighted, prefer nodes with many entries
-                return numericCount >= 1 ? (numericCount * (totalCount >= 10 ? 2 : 1)) : 0;
-            };
-
-            const buildMapFromNode = (node) => {
-                const out = {};
-                for (let k of Object.keys(node)) {
-                    const v = node[k];
-                    const val = tryExtractNumericValue(v);
-                    if (val !== null) out[k] = val;
-                    else if (v && typeof v === 'object') {
-                        // try to extract numeric from child object
-                        const childVal = tryExtractNumericValue(v);
-                        if (childVal !== null) out[k] = childVal;
-                    }
-                }
-                return out;
-            };
-
-            const dfs = (node, path, depth) => {
-                if (!node || typeof node !== 'object' || depth > 6) return;
-                if (visited.has(node)) return;
-                visited.add(node);
-
-                const score = scoreNode(node);
-                if (score > best.score) {
-                    const candidateMap = buildMapFromNode(node);
-                    if (Object.keys(candidateMap).length > 0) {
-                        best = { map: candidateMap, score, path };
-                    }
-                }
-
-                for (let k of Object.keys(node)) {
-                    try {
-                        const child = node[k];
-                        if (child && typeof child === 'object') dfs(child, path + '->' + k, depth + 1);
-                    } catch (e) { }
-                }
-            };
-
-            dfs(root, 'root', 0);
-            return best;
-        };
-
-        // 1) Try direct VolumeRenderer outputs first (many candidate names)
-        if (VR) {
+        if (VR && typeof VR.getAnnualTeacherVolumes === 'function') {
             try {
+                const vrMap = VR.getAnnualTeacherVolumes();
+                if (vrMap && Object.keys(vrMap).length > 0) {
+                    annualRaw = vrMap;
+                    usedSource = 'VolumeRenderer.getAnnualTeacherVolumes()';
+                }
+            } catch (e) {
+                console.warn('initTeachersWorkloadChart: VolumeRenderer.getAnnualTeacherVolumes failed', e);
+            }
+        }
+
+        // Fallback to VolumeService.calculateAllVolumes if VR did not return useful data
+        if (!annualRaw || Object.keys(annualRaw).length === 0) {
+            try {
+                if (typeof VolumeService !== 'undefined' && VolumeService && typeof VolumeService.calculateAllVolumes === 'function') {
+                    const enseignants = StateManager.state.enseignants || [];
+                    const allSeances = (typeof StateManager.getSeances === 'function') ? StateManager.getSeances() : [];
+                    const combined = VolumeService.calculateAllVolumes(enseignants, allSeances, StateManager.state.enseignantVolumesSupplementaires || {}, StateManager.state.header?.session || '', StateManager.state.volumesAutomne || {}) || {};
+                    if (combined && Object.keys(combined).length > 0) {
+                        annualRaw = combined;
+                        usedSource = 'VolumeService.calculateAllVolumes(allSeances)';
+                    }
+                }
+            } catch (e) {
+                console.warn('initTeachersWorkloadChart: VolumeService.calculateAllVolumes failed', e);
+            }
+        }
+
+        // As a last resort, keep the old deep-scan heuristic on VR (if present)
+        if ((!annualRaw || Object.keys(annualRaw).length === 0) && VR) {
+            try {
+                // lightweight deep-scan heuristics extracted from previous implementation
+                const tryExtractNumericValue = (v) => {
+                    if (v == null) return null;
+                    if (typeof v === 'number' && !isNaN(v)) return Number(v);
+                    if (typeof v === 'string' && v.trim() !== '' && !isNaN(Number(v))) return Number(v);
+                    if (typeof v === 'object') {
+                        const cand = ['total', 'annual', 'volume', 'h', 'hours', 'value', 'v'];
+                        for (let p of cand) if (v[p] !== undefined && !isNaN(Number(v[p]))) return Number(v[p]);
+                        for (let k in v) {
+                            const c = v[k];
+                            if (typeof c === 'number' && !isNaN(c)) return Number(c);
+                            if (typeof c === 'string' && c.trim() !== '' && !isNaN(Number(c))) return Number(c);
+                        }
+                    }
+                    return null;
+                };
+                const findTeacherMapDeep = (root) => {
+                    const visited = new WeakSet();
+                    let best = { map: null, score: 0 };
+                    const scoreNode = (node) => {
+                        if (!node || typeof node !== 'object') return 0;
+                        let numeric = 0, total = 0;
+                        for (let k of Object.keys(node)) {
+                            total++;
+                            try { if (tryExtractNumericValue(node[k]) !== null) numeric++; } catch (e) {}
+                        }
+                        return numeric >= 1 ? (numeric * (total >= 10 ? 2 : 1)) : 0;
+                    };
+                    const build = (node) => {
+                        const out = {};
+                        for (let k of Object.keys(node)) {
+                            const v = node[k];
+                            const val = tryExtractNumericValue(v);
+                            if (val !== null) out[k] = val;
+                        }
+                        return out;
+                    };
+                    const dfs = (n, depth = 0) => {
+                        if (!n || typeof n !== 'object' || depth > 6 || visited.has(n)) return;
+                        visited.add(n);
+                        const sc = scoreNode(n);
+                        if (sc > best.score) {
+                            const cand = build(n);
+                            if (Object.keys(cand).length > 0) best = { map: cand, score: sc };
+                        }
+                        for (let k of Object.keys(n)) {
+                            try { if (typeof n[k] === 'object') dfs(n[k], depth + 1); } catch (e) {}
+                        }
+                    };
+                    dfs(root, 0);
+                    return best.map || null;
+                };
+
                 const candidates = [
                     () => (typeof VR.getAnnualTeacherVolumes === 'function' ? VR.getAnnualTeacherVolumes() : null),
                     () => (typeof VR.getAllTeacherVolumes === 'function' ? VR.getAllTeacherVolumes() : null),
@@ -666,61 +656,20 @@ class DashboardRenderer {
                     () => (VR.metrics ? VR.metrics : null),
                     () => VR
                 ];
-
                 for (let g of candidates) {
                     let cand = null;
                     try { cand = g(); } catch (e) { cand = null; }
                     if (cand && typeof cand === 'object' && Object.keys(cand).length > 0) {
-                        // if cand looks immediately like teacher map (many keys, numeric or nested numeric), accept
-                        const bestTry = findTeacherMapDeep(cand);
-                        if (bestTry && bestTry.map && bestTry.score > 0) {
-                            annualRaw = bestTry.map;
-                            usedSource = 'VolumeRenderer (found in candidate via deep scan)';
+                        const map = findTeacherMapDeep(cand);
+                        if (map && Object.keys(map).length > 0) {
+                            annualRaw = map;
+                            usedSource = 'VolumeRenderer (deep scan fallback)';
                             break;
                         }
                     }
                 }
-
-                // If not found yet, deep scan the whole VR object
-                if ((!annualRaw || Object.keys(annualRaw).length === 0)) {
-                    const best = findTeacherMapDeep(VR);
-                    if (best && best.map && best.score > 0) {
-                        annualRaw = best.map;
-                        usedSource = 'VolumeRenderer (deep scan) -> ' + best.path;
-                    } else {
-                        // If VolumeRenderer had only aggregate metrics (your case), note it
-                        if (looksLikeAggregate(VR)) {
-                            usedSource = 'VolumeRenderer (contains aggregates only)';
-                        }
-                    }
-                }
             } catch (e) {
-                console.warn('initTeachersWorkloadChart: error reading VolumeRenderer', e);
-                annualRaw = {};
-                usedSource = null;
-            }
-        }
-
-        // 2) Fallback: VolumeService.calculateAllVolumes(allSeances) or provided data
-        if (!annualRaw || Object.keys(annualRaw).length === 0) {
-            try {
-                if (typeof VolumeService !== 'undefined' && VolumeService && typeof VolumeService.calculateAllVolumes === 'function') {
-                    const enseignants = StateManager.state.enseignants || [];
-                    const allSeances = (typeof StateManager.getSeances === 'function') ? StateManager.getSeances() : [];
-                    const combined = VolumeService.calculateAllVolumes(enseignants, allSeances, StateManager.state.enseignantVolumesSupplementaires || {}, StateManager.state.header.session || '', StateManager.state.volumesAutomne || {}) || {};
-                    annualRaw = combined;
-                    usedSource = 'VolumeService.calculateAllVolumes(allSeances)';
-                } else if (Array.isArray(data) && data.length) {
-                    // dataset often contains current volumes — use as fallback
-                    data.forEach(d => {
-                        const name = d.nom || d.name || '';
-                        const vol = Number(d.volume ?? d.value ?? d.v ?? d.h ?? 0) || 0;
-                        if (name) annualRaw[name] = (annualRaw[name] || 0) + vol;
-                    });
-                    usedSource = 'provided data array';
-                }
-            } catch (e) {
-                console.warn('initTeachersWorkloadChart: fallback annualRaw error', e);
+                console.warn('initTeachersWorkloadChart: VolumeRenderer deep-scan fallback failed', e);
             }
         }
 
@@ -772,7 +721,7 @@ class DashboardRenderer {
             console.warn('initTeachersWorkloadChart: unable to compute referenceValue', err);
         }
 
-        console.debug('initTeachersWorkloadChart: usedSource=', usedSource, 'annualMap sample=', Object.entries(annualMap).slice(0, 12), 'sorted sample=', sorted.slice(0, 12));
+       // console.debug('initTeachersWorkloadChart: usedSource=', usedSource, 'annualMap sample=', Object.entries(annualMap).slice(0, 12), 'sorted sample=', sorted.slice(0, 12));
 
         // Render chart
         this.charts.teachersWorkload = new Chart(ctx, {

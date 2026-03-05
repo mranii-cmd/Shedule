@@ -4,6 +4,11 @@
  *
  * Ajout : fallback _computeVolumesFromSeances pour calculer les volumes d'automne à partir
  * des séances persistées si ni l'état ni le service ne fournissent de données utiles.
+ *
+ * Améliorations UI & pagination :
+ * - recherche + per-page + pagination pour la table Matières
+ * - recherche + per-page + pagination pour la table Enseignants
+ * - gestion des événements via délégation (init)
  */
 
 import StateManager from '../controllers/StateManager.js';
@@ -15,17 +20,53 @@ import { safeText } from '../utils/sanitizers.js';
 import SchedulingService from '../services/SchedulingService.js';
 import { normalizeSessionLabel, getStorageSessionKey } from '../utils/session.js';
 import { attachIndicator } from '../ui/indicators.js';
+import { filterSubjectsByDepartment } from '../utils/helpers.js';
 
 class VolumeRenderer {
     constructor() {
         this.container = null;
         this.annualMetrics = null; // cache des métriques annuelles
+
+        // Pagination / UI state
+        this.pageState = {
+            teachers: 1,
+            subjects: 1
+        };
+        this.pageSize = {
+            teachers: 10,
+            subjects: 10
+        };
+        this.filters = {
+            teacherQuery: '',
+            subjectQuery: ''
+        };
+
+        // handlers
+        this._onPaginationClick = this._onPaginationClick.bind(this);
+        this._onControlInput = this._onControlInput.bind(this);
+        this._listenerAttached = false;
+        this._searchDebounce = null;
     }
 
     init(containerId = 'volumesContainer') {
         this.container = document.getElementById(containerId);
         if (!this.container) {
-            console.warn(`Container #${containerId} not found`);
+            console.warn(`Container #${containerId} not found — fallback to document-level handlers`);
+            if (!this._listenerAttached) {
+                document.addEventListener('click', this._onPaginationClick);
+                document.addEventListener('input', this._onControlInput);
+                document.addEventListener('change', this._onControlInput);
+                this._listenerAttached = true;
+            }
+            return;
+        }
+
+        // attach handlers to container
+        if (!this._listenerAttached) {
+            this.container.addEventListener('click', this._onPaginationClick);
+            this.container.addEventListener('input', this._onControlInput);
+            this.container.addEventListener('change', this._onControlInput);
+            this._listenerAttached = true;
         }
     }
 
@@ -37,11 +78,10 @@ class VolumeRenderer {
 
         const globalHtml = this.renderGlobalMetrics();
         const subjectHtml = this.renderSubjectVolumes();
-
         const maybeTeacherHtml = this.renderTeacherVolumes();
 
+        // Sync/async handling same as before (teacher part may be sync)
         if (maybeTeacherHtml && typeof maybeTeacherHtml.then === 'function') {
-            // async path
             this.container.innerHTML = `
                 <div class="volumes-section">
                     ${globalHtml}
@@ -74,7 +114,6 @@ class VolumeRenderer {
                 this._attachAllTeacherIndicators();
             });
         } else {
-            // sync path
             this.container.innerHTML = `
                 <div class="volumes-section">
                     ${globalHtml}
@@ -151,7 +190,6 @@ class VolumeRenderer {
         const annualVHM = annualMetrics.annualVHM || 0;
         const totalRegisteredTeachers = annualMetrics.totalRegisteredTeachers || (StateManager.state.enseignants || []).length;
 
-        // Affichage simplifié : uniquement les métriques annuelles demandées (VHT annuel + VHM annuel)
         return `
             <div class="global-metrics">
                 <h3>📊 Métriques Globales Annuelles</h3>
@@ -300,6 +338,80 @@ class VolumeRenderer {
 
         return map;
     }
+/** 
+     * Retourne une map normalisée { teacherName: hours } pour l'ensemble des enseignants,
+     * en privilégiant VolumeService.calculateAllVolumes (source de vérité), puis en
+     * retombant sur un fallback calculé directement depuis les séances + volumes stockés.
+     *
+     * Méthode synchronique : DashboardRenderer et d'autres composants peuvent l'appeler
+     * directement pour récupérer les volumes complets même si l'UI de VolumeRenderer est paginée.
+     */
+    getAnnualTeacherVolumes() {
+        try {
+            // cache simple pour éviter recalculs répétés pendant le rendu
+            if (this._annualTeacherMapCache && typeof this._annualTeacherMapCache === 'object') {
+                return this._annualTeacherMapCache;
+            }
+
+            const enseignants = (StateManager.state && Array.isArray(StateManager.state.enseignants)) ? StateManager.state.enseignants.slice() : [];
+            const allSeances = Array.isArray(StateManager.state.seances) && StateManager.state.seances.length ? StateManager.state.seances : (typeof StateManager.getSeances === 'function' ? StateManager.getSeances() : []);
+            const volumesSupplementaires = StateManager.state.enseignantVolumesSupplementaires || {};
+            const storedVolumes = StateManager.state.volumesAutomne || {};
+            const sessionLabel = (StateManager.state && StateManager.state.header && StateManager.state.header.session) ? StateManager.state.header.session : '';
+
+            let combined = {};
+
+            // 1) Prefer VolumeService.calculateAllVolumes if available
+            try {
+                if (typeof VolumeService !== 'undefined' && VolumeService && typeof VolumeService.calculateAllVolumes === 'function') {
+                    const vs = VolumeService.calculateAllVolumes(enseignants, allSeances, volumesSupplementaires || {}, sessionLabel || '', storedVolumes || {}) || {};
+                    if (vs && Object.keys(vs).length > 0) {
+                        combined = vs;
+                    }
+                }
+            } catch (e) {
+                console.warn('VolumeRenderer.getAnnualTeacherVolumes: VolumeService.calculateAllVolumes failed', e);
+            }
+
+            // 2) Fallback: use stored volumes and/or compute from seances
+            if (!combined || Object.keys(combined).length === 0) {
+                try {
+                    // start from stored volumes (volumesAutomne etc.)
+                    combined = Object.assign({}, storedVolumes || {});
+
+                    // compute from seances and merge (seances-derived values accumulate)
+                    const fromSeances = this._computeVolumesFromSeances(allSeances || []);
+                    // merge: sum values (storedVolumes may represent only autumn or partial)
+                    for (const k of Object.keys(fromSeances || {})) {
+                        combined[k] = (Number(combined[k] || 0) + Number(fromSeances[k] || 0));
+                    }
+                } catch (e) {
+                    console.warn('VolumeRenderer.getAnnualTeacherVolumes: fallback computation failed', e);
+                    combined = combined || {};
+                }
+            }
+
+            // Normalize keys against the registered enseignants list
+            const normalized = this._normalizeVolumesMap(combined || {}, enseignants || [], { dropZero: false });
+
+            // cache result for the current render lifecycle
+            this._annualTeacherMapCache = normalized;
+            return normalized;
+        } catch (err) {
+            console.warn('VolumeRenderer.getAnnualTeacherVolumes unexpected error', err);
+            return {};
+        }
+    }
+
+    /**
+     * Vide le cache interne de getAnnualTeacherVolumes.
+     * Appeler avant render si l'état a changé.
+     */
+    clearAnnualTeacherVolumesCache() {
+        this._annualTeacherMapCache = null;
+    }
+
+
 
     computeProgressPercent(volumeHours, reference) {
         let ref = Number(reference || 0);
@@ -339,62 +451,11 @@ class VolumeRenderer {
      * Rend le tableau des volumes par enseignant.
      * Supporte calculateAllVolumes sync ou Promise.
      * Persist computed autumn volumes into StateManager.state.volumesAutomne if empty or only zeros.
+     *
+     * Ajout UI : recherche + per-page + pagination.
      */
     renderTeacherVolumes() {
-        // Associe séance à sa session via la filière
-        function getSessionOfSeance(seance, filieres) {
-            // Cherche la filière qui correspond
-            const f = filieres.find(fil => String(fil.nom || fil.name || '').trim().toLowerCase() === String(seance.filiere || '').trim().toLowerCase());
-            // Retourne "printemps", "automne" (en minuscules pour le filtre)
-            return f && f.session ? String(f.session).trim().toLowerCase() : '';
-        }
-        function filterSeancesBySession(seances, filieres, sessionType) {
-            return seances.filter(s => getSessionOfSeance(s, filieres).includes(sessionType));
-        }
-        function sumHTP(seances, teacherName) {
-            // - For Cours and TD: split hTP_Affecte equally between participating teachers
-            // - For TP: each teacher receives the full hTP_Affecte (existing behaviour)
-            try {
-                const tNameNorm = String(teacherName || '').trim().toLowerCase();
-                return seances.reduce((acc, s) => {
-                    try {
-                        const h = Number(s.hTP_Affecte) || 0;
-                        if (!h) return acc;
-
-                        // determine teachers list for this seance
-                        let teachers = null;
-                        if (Array.isArray(s.enseignantsArray) && s.enseignantsArray.length) teachers = s.enseignantsArray;
-                        else if (Array.isArray(s.enseignants) && s.enseignants.length) teachers = s.enseignants;
-                        else if (s.enseignant) teachers = [s.enseignant];
-                        else if (s.teacher) teachers = Array.isArray(s.teacher) ? s.teacher : [s.teacher];
-                        else teachers = [];
-
-                        if (!teachers || teachers.length === 0) return acc;
-
-                        // check if this teacher is part of the teachers list
-                        const isMember = teachers.some(e => {
-                            const name = (typeof e === 'object') ? (e.nom || e.name || e.id || '') : String(e || '');
-                            return String(name).trim().toLowerCase() === tNameNorm;
-                        });
-                        if (!isMember) return acc;
-
-                        const type = String(s.type || '').toLowerCase();
-                        const isTP = type === 'tp' || type.includes('tp');
-                        const credit = isTP ? h : (h / (teachers.length || 1));
-                        return acc + credit;
-                    } catch (inner) {
-                        return acc;
-                    }
-                }, 0);
-            } catch (e) {
-                return 0;
-            }
-        }
-        function sumForfaits(forfaitsList, teacherName) {
-            return (forfaitsList || [])
-                .filter(f => String(f.enseignant || '').trim().toLowerCase() === String(teacherName).trim().toLowerCase())
-                .reduce((acc, f) => acc + (Number(f.volumeHoraire) || 0), 0);
-        }
+        // reuse original logic for computing volumes, but return HTML filtered/paginated
         let teachers = [];
         try {
             teachers = TeacherController.getAllTeachersWithStats();
@@ -415,58 +476,120 @@ class VolumeRenderer {
         const allForfaits = StateManager.state.forfaits || [];
         const filieres = StateManager.state.filieres || [];
 
-        // ✅ Filtrage indirect des séances par session via filière
-        const springSeances = filterSeancesBySession(allSeances, filieres, 'printemps');
-        const autumnSeances = filterSeancesBySession(allSeances, filieres, 'automne');
-        // Normalize stored volumes d'automne (if any) into canonical teacher names
-        // Determine current session (normalize) to decide if forfaits must be added
-        const headerSessionRawForRenderer = (StateManager.state && StateManager.state.header && StateManager.state.header.session) ? StateManager.state.header.session : '';
-        const normalizedSessionForRenderer = normalizeSessionLabel(headerSessionRawForRenderer); // 'autumn'|'spring'|'unknown'
-        // Only include forfaits in totals when rendering the autumn session (forfait already counted in stored autumn volumes)
-        const includeForfaitInTotals = (normalizedSessionForRenderer === 'autumn');
-        const storedVolumesRaw = StateManager.state.volumesAutomne || {};
-        // try also localStorage as a last-resort fallback (if StateManager didn't load it)
-        let persistedFromLS = {};
-        try {
-            if ((!storedVolumesRaw || Object.keys(storedVolumesRaw).length === 0) && typeof window !== 'undefined' && window.localStorage) {
-                const raw = window.localStorage.getItem('volumesAutomne');
-                if (raw) persistedFromLS = JSON.parse(raw || '{}') || {};
-            }
-        } catch (e) {
-            // ignore
-        }
-        const mergedStoredVolumes = Object.assign({}, storedVolumesRaw || {}, persistedFromLS || {});
-        const normalizedStoredVolumes = this._normalizeVolumesMap(mergedStoredVolumes, teachers.map(t => t.nom), { dropZero: false });
+        const springSeances = (Array.isArray(allSeances) && allSeances.length) ? allSeances.filter(s => {
+            const f = filieres.find(fi => String(fi.nom || '').trim().toLowerCase() === String(s.filiere || '').trim().toLowerCase());
+            return f && String(f.session || '').toLowerCase().includes('printemps');
+        }) : [];
 
-        // helper to get autumn volume either from actual autumnSeances or from stored volumes
-        const getAutumnVolumeFor = (teacherName) => {
-            // prefer actual autumn seances if present (pure séance-sum, SANS forfait)
-            if (Array.isArray(autumnSeances) && autumnSeances.length > 0) {
-                return sumHTP(autumnSeances, teacherName);
-            }
-            // if we must use a stored value, subtract forfait (to avoid double-count)
-            const forfaitForTeacher = sumForfaits(allForfaits, teacherName) || 0;
-            if (normalizedStoredVolumes && Object.prototype.hasOwnProperty.call(normalizedStoredVolumes, teacherName)) {
-                const stored = Number(normalizedStoredVolumes[teacherName] || 0);
-                return Math.max(0, stored - forfaitForTeacher);
-            }
-            // final tolerant lookup (different shapes / keys)
+        const autumnSeances = (Array.isArray(allSeances) && allSeances.length) ? allSeances.filter(s => {
+            const f = filieres.find(fi => String(fi.nom || '').trim().toLowerCase() === String(s.filiere || '').trim().toLowerCase());
+            return f && String(f.session || '').toLowerCase().includes('automne');
+        }) : [];
+
+        // reuse helper functions from original file by inlining essential pieces
+        const sumHTP = (seances, teacherName) => {
             try {
-                const stored = Number(this._getValueFromMapTolerance(mergedStoredVolumes, teacherName) || 0);
-                return Math.max(0, stored - forfaitForTeacher);
+                const tNameNorm = String(teacherName || '').trim().toLowerCase();
+                return seances.reduce((acc, s) => {
+                    try {
+                        const h = Number(s.hTP_Affecte) || 0;
+                        if (!h) return acc;
+                        let teachersList = null;
+                        if (Array.isArray(s.enseignantsArray) && s.enseignantsArray.length) teachersList = s.enseignantsArray;
+                        else if (Array.isArray(s.enseignants) && s.enseignants.length) teachersList = s.enseignants;
+                        else if (s.enseignant) teachersList = [s.enseignant];
+                        else if (s.teacher) teachersList = Array.isArray(s.teacher) ? s.teacher : [s.teacher];
+                        else teachersList = [];
+
+                        if (!teachersList || teachersList.length === 0) return acc;
+
+                        const isMember = teachersList.some(e => {
+                            const name = (typeof e === 'object') ? (e.nom || e.name || e.id || '') : String(e || '');
+                            return String(name).trim().toLowerCase() === tNameNorm;
+                        });
+                        if (!isMember) return acc;
+
+                        const type = String(s.type || '').toLowerCase();
+                        const isTP = type === 'tp' || type.includes('tp');
+                        const credit = isTP ? h : (h / (teachersList.length || 1));
+                        return acc + credit;
+                    } catch (inner) {
+                        return acc;
+                    }
+                }, 0);
             } catch (e) {
                 return 0;
             }
         };
 
-        teachers.sort((a, b) => {
-            const aForfait = sumForfaits(allForfaits, a.nom) || 0;
-            const bForfait = sumForfaits(allForfaits, b.nom) || 0;
-            const aTotal = (sumHTP(springSeances, a.nom) || 0) + (getAutumnVolumeFor(a.nom) || 0) + aForfait;
-            const bTotal = (sumHTP(springSeances, b.nom) || 0) + (getAutumnVolumeFor(b.nom) || 0) + bForfait;
-            return bTotal - aTotal;
+        const sumForfaits = (forfaitsList, teacherName) => {
+            return (forfaitsList || [])
+                .filter(f => String(f.enseignant || '').trim().toLowerCase() === String(teacherName).trim().toLowerCase())
+                .reduce((acc, f) => acc + (Number(f.volumeHoraire) || 0), 0);
+        };
+
+        // build an array of teacher rows with computed values
+        const teacherRows = teachers.map(teacher => {
+            const name = teacher.nom || '';
+            const printempsVolume = sumHTP(springSeances, name);
+            // autumn volume: prefer autumnSeances if present, otherwise stored volumes
+            const storedVolumesRaw = StateManager.state.volumesAutomne || {};
+            let persistedFromLS = {};
+            try {
+                if ((!storedVolumesRaw || Object.keys(storedVolumesRaw).length === 0) && typeof window !== 'undefined' && window.localStorage) {
+                    const raw = window.localStorage.getItem('volumesAutomne');
+                    if (raw) persistedFromLS = JSON.parse(raw || '{}') || {};
+                }
+            } catch (e) { /* noop */ }
+            const mergedStoredVolumes = Object.assign({}, storedVolumesRaw || {}, persistedFromLS || {});
+            let automneVolume = 0;
+            if (Array.isArray(autumnSeances) && autumnSeances.length > 0) {
+                automneVolume = sumHTP(autumnSeances, name);
+            } else {
+                const forfaitForTeacher = sumForfaits(allForfaits, name) || 0;
+                const normMap = this._normalizeVolumesMap(mergedStoredVolumes, teachers.map(t => t.nom), { dropZero: false });
+                if (Object.prototype.hasOwnProperty.call(normMap, name)) {
+                    automneVolume = Math.max(0, Number(normMap[name]) - forfaitForTeacher);
+                } else {
+                    // tolerant lookup
+                    const tolerant = Number(this._getValueFromMapTolerance(mergedStoredVolumes, name) || 0);
+                    automneVolume = Math.max(0, tolerant - forfaitForTeacher);
+                }
+            }
+            const forfaitVolume = sumForfaits(allForfaits, name);
+            const totalVolume = printempsVolume + automneVolume + forfaitVolume;
+            return {
+                nom: name,
+                printemps: printempsVolume,
+                automne: automneVolume,
+                forfait: forfaitVolume,
+                total: totalVolume
+            };
         });
-        // Reference used to compute progress percent & color (align with VolumeRenderer logic)
+
+        // apply teacher search filter
+        const q = String(this.filters.teacherQuery || '').trim().toLowerCase();
+        let filtered = teacherRows;
+        if (q) {
+            filtered = teacherRows.filter(r => String(r.nom || '').toLowerCase().includes(q));
+        }
+
+        // sort by total desc
+        filtered.sort((a, b) => b.total - a.total);
+
+        // pagination
+        const total = filtered.length;
+        const page = Math.max(1, Number(this.pageState.teachers) || 1);
+        const perPage = this.pageSize.teachers || 10;
+        const totalPages = Math.max(1, Math.ceil(total / perPage));
+        const start = (page - 1) * perPage;
+        const pageItems = filtered.slice(start, start + perPage);
+
+        // controls: search + per-page
+        const perPageOptions = [5, 10, 20, 50];
+        const perPageSelectHtml = perPageOptions.map(n => `<option value="${n}" ${n === perPage ? 'selected' : ''}>${n}</option>`).join('');
+
+        // reference for colors
         const VHM_annual = (this.annualMetrics && this.annualMetrics.annualVHM) ? this.annualMetrics.annualVHM : (this.computeAnnualMetrics().annualVHM || 0);
         let referenceForColors = Number(VHM_annual || 0);
         const headerSessionRaw = (StateManager.state && StateManager.state.header && StateManager.state.header.session) ? StateManager.state.header.session : '';
@@ -478,9 +601,22 @@ class VolumeRenderer {
             }
         } catch (e) { /* noop */ }
         const tolerance = Number(StateManager.state.toleranceMaxWorkload || 16);
+
+        // build HTML
         let html = `
         <div class="teacher-volumes">
-            <h3>👨‍🏫 Volumes horaires Total Annuel par Enseignant (Printemps + Automne + Forfait)</h3>
+            <div class="teacher-header">
+                <h3>👨‍🏫 Volumes horaires Total Annuel par Enseignant (${total})</h3>
+                <div class="teacher-controls">
+                    <input type="search" class="teacher-search stats-search" placeholder="Rechercher un enseignant…" value="${safeText(this.filters.teacherQuery || '')}" aria-label="Rechercher un enseignant">
+                    <label class="per-page-label">Afficher
+                        <select class="per-page-select" data-list="teachers" aria-label="Sélectionner le nombre d'enseignants par page">
+                            ${perPageSelectHtml}
+                        </select>
+                    </label>
+                </div>
+            </div>
+
             <table class="volumes-table">
               <thead>
                 <tr>
@@ -492,64 +628,56 @@ class VolumeRenderer {
                 </tr>
               </thead>
               <tbody>
-    `;
-        teachers.forEach(teacher => {
-            // volumes sessions (séances uniquement)
-            const printempsVolume = sumHTP(springSeances, teacher.nom);
-            const automneVolume = getAutumnVolumeFor(teacher.nom);
+        `;
 
-            // forfait : colonne dédiée (ne jamais l'ajouter dans printemps/automne)
-            const forfaitVolume = sumForfaits(allForfaits, teacher.nom);
-
-            // total annuel = printemps + automne + forfait (forfait compté UNE seule fois)
-            const totalVolume = printempsVolume + automneVolume + forfaitVolume;
-
-            // build progress indicator (pct + color) for the Total annuel cell
-            const pct = this.computeProgressPercent(totalVolume, referenceForColors);
-            const color = this.getProgressColorByReference(totalVolume, referenceForColors, tolerance);
+        pageItems.forEach(row => {
+            const pct = this.computeProgressPercent(row.total, referenceForColors);
+            const color = this.getProgressColorByReference(row.total, referenceForColors, tolerance);
             const progressHTML = `
-        <span class="tvp-progress-wrapper" title="${totalVolume} h — ${pct}%">
-            <span class="tvp-progress-bar" style="display:inline-block; width:84px; height:15px; background:#e9ecef; border-radius:8px; overflow:hidden; vertical-align:middle; position:relative;">
-                <span class="tvp-progress-fill" style="position:absolute; left:0; top:0; bottom:0; width:${pct}%; background:${color}; transition:width .35s;"></span>
+            <span class="tvp-progress-wrapper" title="${row.total} h — ${pct}%">
+                <span class="tvp-progress-bar" title="${row.total} h" style="display:inline-block; width:84px; height:15px; background:#e9ecef; border-radius:8px; overflow:hidden; vertical-align:middle; position:relative;">
+                    <span class="tvp-progress-fill" style="position:absolute; left:0; top:0; bottom:0; width:${pct}%; background:${color}; transition:width .35s;"></span>
+                </span>
+                <span class="tvp-progress-text" style="margin-left:8px; font-size:0.9em; color:#495057;">${pct}%</span>
             </span>
-            <span class="tvp-progress-text" style="margin-left:8px; font-size:0.9em; color:#495057;">${pct}%</span>
-        </span>
-    `;
-
+            `;
             html += `
     <tr>
-        <td><strong>${safeText(teacher.nom)}</strong></td>
-        <td>${safeText(String(printempsVolume))}</td>
-        <td>${safeText(String(automneVolume))}</td>
-        <td>${safeText(String(forfaitVolume))}</td>
+        <td><strong>${safeText(row.nom)}</strong></td>
+        <td>${safeText(String(row.printemps))}</td>
+        <td>${safeText(String(row.automne))}</td>
+        <td>${safeText(String(row.forfait))}</td>
         <td>
             ${progressHTML}
-            <strong style="margin-left:12px;">${safeText(String(totalVolume))}</strong>
-            <!-- anchor for TeacherVolumeIndicator: hidden input contains teacher identifier -->
-            <input type="hidden" class="tvi-reference" value="${safeText(teacher.nom)}" aria-hidden="true" />
+            <strong style="margin-left:12px;">${safeText(String(row.total))}</strong>
+            <input type="hidden" class="tvi-reference" value="${safeText(row.nom)}" aria-hidden="true" />
         </td>
     </tr>
-`;
+            `;
         });
+
         html += `
-                </tbody>
+              </tbody>
             </table>
+
+            <div class="pagination-row">
+                ${this._renderPaginationHtml('teachers', page, totalPages)}
+            </div>
         </div>
-    `;
+        `;
         return html;
     }
 
     /**
- * Parcourt le DOM rendu et attache les indicateurs (TeacherVolumeIndicator)
- * aux éléments de référence (input.tvi-reference) insérés dans la cellule Total annuel.
- */
+     * Parcourt le DOM rendu et attache les indicateurs (TeacherVolumeIndicator)
+     * aux éléments de référence (input.tvi-reference) insérés dans la cellule Total annuel.
+     */
     _attachAllTeacherIndicators() {
         try {
             if (!this.container) return;
             const refs = this.container.querySelectorAll('input.tvi-reference');
             if (!refs || refs.length === 0) return;
 
-            // choisir la fonction à utiliser (préférence pour import)
             const fn = (typeof attachIndicator === 'function') ? attachIndicator
                 : (typeof window.attachIndicator === 'function') ? window.attachIndicator
                     : null;
@@ -570,8 +698,10 @@ class VolumeRenderer {
             console.debug('VolumeRenderer._attachAllTeacherIndicators failed', e);
         }
     }
+
     /**
      * Tolerant extractor: try multiple key shapes to read numeric value from a map for a teacher.
+     * (reused from original)
      */
     _getValueFromMapTolerance(map = {}, teacher) {
         if (!map || typeof map !== 'object') return 0;
@@ -640,6 +770,10 @@ class VolumeRenderer {
         const subjects = SubjectController.getAllSubjectsWithStats() || [];
         const filieres = StateManager.state.filieres || [];
 
+        // Filtrer par département
+        const departement = StateManager.state?.header?.departement || '';
+        const subjectsFilteredByDept = filterSubjectsByDepartment(subjects, departement);
+
         const headerSessionRaw = (StateManager.state && StateManager.state.header && StateManager.state.header.session) ? StateManager.state.header.session : '';
         const normalized = normalizeSessionLabel(headerSessionRaw); // 'autumn'|'spring'|'unknown'
         let sessionLabelHuman = null;
@@ -647,10 +781,10 @@ class VolumeRenderer {
         else if (normalized === 'spring') sessionLabelHuman = 'Printemps';
 
         // If session unknown -> show all subjects (but put a note)
-        let subjectsToShow = subjects;
+        let subjectsToShow = subjectsFilteredByDept;
         let noteHtml = '';
         if (!sessionLabelHuman) {
-            noteHtml = `<div class="subjects-note">Session non définie — affichage de toutes les matières</div>`;
+            noteHtml = `<div class="subjects-note">Session non définie — affichage de toutes les matières${departement && departement !== 'Administration' ? ` (département: ${safeText(departement)})` : ''}</div>`;
         } else {
             // collect filiere names for this session
             const filieresForSession = filieres
@@ -662,19 +796,19 @@ class VolumeRenderer {
                 return `
                     <div class="subject-volumes">
                         <h3>📚 Volumes Horaires par Matière (session courante)</h3>
-                        <div class="empty-message">Aucune filière configurée pour la session ${safeText(sessionLabelHuman)}.</div>
+                        <div class="empty-message">Aucune filière configurée pour la session ${safeText(sessionLabelHuman)}${departement && departement !== 'Administration' ? ` (département: ${safeText(departement)})` : ''}.</div>
                     </div>
                 `;
             }
 
             // filter subjects by their configured filiere (support multiple storage shapes)
-            subjectsToShow = subjects.filter(s => {
+            subjectsToShow = subjectsFilteredByDept.filter(s => {
                 const cfgFiliere = (s.config && s.config.filiere) ? String(s.config.filiere).trim()
                     : (StateManager.state.matiereGroupes && StateManager.state.matiereGroupes[s.nom] ? StateManager.state.matiereGroupes[s.nom].filiere : '');
                 return cfgFiliere && filieresForSession.includes(cfgFiliere);
             });
 
-            noteHtml = `<div class="subjects-note">Matières pour la session ${safeText(sessionLabelHuman)}</div>`;
+            noteHtml = `<div class="subjects-note">Matières pour la session ${safeText(sessionLabelHuman)}${departement && departement !== 'Administration' ? ` — Département: ${safeText(departement)}` : ''}</div>`;
         }
 
         // Sort by VHT desc
@@ -689,9 +823,39 @@ class VolumeRenderer {
             `;
         }
 
+        // Apply subject search filter
+        const q = String(this.filters.subjectQuery || '').trim().toLowerCase();
+        let filtered = subjectsToShow;
+        if (q) {
+            filtered = subjectsToShow.filter(s => String(s.nom || '').toLowerCase().includes(q));
+        }
+
+        // Pagination
+        const total = filtered.length;
+        const page = Math.max(1, Number(this.pageState.subjects) || 1);
+        const perPage = this.pageSize.subjects || 10;
+        const totalPages = Math.max(1, Math.ceil(total / perPage));
+        const start = (page - 1) * perPage;
+        const pageItems = filtered.slice(start, start + perPage);
+
+        // controls
+        const perPageOptions = [5, 10, 20, 50];
+        const perPageSelectHtml = perPageOptions.map(n => `<option value="${n}" ${n === perPage ? 'selected' : ''}>${n}</option>`).join('');
+
         let html = `
             <div class="subject-volumes">
-                <h3>📚 Volumes Horaires par Matière (session courante)</h3>
+                <div class="subject-header">
+                    <h3>📚 Volumes Horaires par Matière (session courante) — ${total} matières</h3>
+                    <div class="subject-controls">
+                        <input type="search" class="subject-search stats-search" placeholder="Rechercher une matière…" value="${safeText(this.filters.subjectQuery || '')}" aria-label="Rechercher une matière">
+                        <label class="per-page-label">Afficher
+                            <select class="per-page-select" data-list="subjects" aria-label="Sélectionner le nombre d'éléments par page">
+                                ${perPageSelectHtml}
+                            </select>
+                        </label>
+                    </div>
+                </div>
+
                 ${noteHtml}
                 <table class="volumes-table">
                     <thead>
@@ -710,8 +874,8 @@ class VolumeRenderer {
                     <tbody>
         `;
 
-        subjectsToShow.forEach(subject => {
-            const completion = subject.stats.completionRate;
+        pageItems.forEach(subject => {
+            const completion = subject.stats.completionRate ?? subject.stats.completion ?? 0;
             const completionClass = completion >= 100 ? 'complete' : completion >= 50 ? 'partial' : 'incomplete';
 
             html += `
@@ -737,110 +901,108 @@ class VolumeRenderer {
         html += `
                     </tbody>
                 </table>
+
+                <div class="pagination-row">
+                    ${this._renderPaginationHtml('subjects', page, totalPages)}
+                </div>
             </div>
         `;
 
         return html;
     }
 
-    getAnnualTeacherVolumes() {
-        // Tentatives non‑recursives pour récupérer une map teacher->hours depuis le renderer ou autres sources
-        try {
-            // 1) méthodes alternatives si elles existent (ne surtout pas appeler this.getAnnualTeacherVolumes)
-            if (typeof this.getTeacherAnnualMap === 'function') {
-                const m = this.getTeacherAnnualMap();
-                if (m && Object.keys(m).length) return m;
+    /**
+     * Génère l'HTML des contrôles de pagination pour une liste donnée
+     */
+    _renderPaginationHtml(listName, currentPage, totalPages) {
+        const maxButtons = 7;
+        let start = 1;
+        let end = totalPages;
+        if (totalPages > maxButtons) {
+            const half = Math.floor(maxButtons / 2);
+            start = Math.max(1, currentPage - half);
+            end = Math.min(totalPages, start + maxButtons - 1);
+            if (end - start + 1 < maxButtons) {
+                start = Math.max(1, end - maxButtons + 1);
             }
-            if (typeof this.getVolumes === 'function') {
-                const m = this.getVolumes();
-                if (m && Object.keys(m).length) return m;
-            }
-
-            // 2) propriétés cache/nommées souvent présentes
-            if (this.annualTeacherVolumes && typeof this.annualTeacherVolumes === 'object' && Object.keys(this.annualTeacherVolumes).length) {
-                return this.annualTeacherVolumes;
-            }
-            if (this.annualVolumes && typeof this.annualVolumes === 'object' && Object.keys(this.annualVolumes).length) {
-                return this.annualVolumes;
-            }
-            if (this.teacherAnnualVolumes && typeof this.teacherAnnualVolumes === 'object' && Object.keys(this.teacherAnnualVolumes).length) {
-                return this.teacherAnnualVolumes;
-            }
-
-            // 3) objet this.data / this.metrics / this.state probe (conservateur)
-            const probeCandidates = [this.data, this.metrics, this.state, this];
-            for (const probe of probeCandidates) {
-                if (probe && typeof probe === 'object') {
-                    const out = {};
-                    const candKeys = ['total', 'annual', 'volume', 'h', 'hTP', 'v', 'value', 'hours'];
-                    for (const k of Object.keys(probe)) {
-                        const v = probe[k];
-                        if (typeof v === 'number' && !isNaN(v)) out[k] = v;
-                        else if (v && typeof v === 'object') {
-                            for (const ck of candKeys) {
-                                if (v[ck] !== undefined && !isNaN(Number(v[ck]))) {
-                                    out[k] = Number(v[ck]);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if (Object.keys(out).length) return out;
-                }
-            }
-        } catch (e) {
-            console.warn('VolumeRenderer.getAnnualTeacherVolumes: erreur lecture interne', e);
         }
 
-        // Fallback : demander au VolumeService (logique métier)
-        try {
-            if (typeof VolumeService !== 'undefined' && VolumeService && typeof VolumeService.calculateAllVolumes === 'function') {
-                const enseignants = (typeof StateManager !== 'undefined' && StateManager.state && Array.isArray(StateManager.state.enseignants))
-                    ? StateManager.state.enseignants
-                    : [];
-                const allSeances = (typeof StateManager !== 'undefined' && typeof StateManager.getSeances === 'function')
-                    ? StateManager.getSeances()
-                    : [];
+        let html = `<button class="pager-btn" data-list="${listName}" data-page="${Math.max(1, currentPage - 1)}" ${currentPage <= 1 ? 'disabled' : ''}>Prev</button>`;
 
-                const combined = VolumeService.calculateAllVolumes(
-                    enseignants,
-                    allSeances,
-                    (StateManager.state && StateManager.state.enseignantVolumesSupplementaires) || {},
-                    (StateManager.state && StateManager.state.header && StateManager.state.header.session) || '',
-                    (StateManager.state && StateManager.state.volumesAutomne) || {}
-                ) || {};
-
-                if (combined && Object.keys(combined).length) return combined;
-            }
-        } catch (e) {
-            console.warn('VolumeRenderer.getAnnualTeacherVolumes: erreur fallback VolumeService', e);
+        for (let p = start; p <= end; p++) {
+            html += `<button class="pager-btn ${p === currentPage ? 'active' : ''}" data-list="${listName}" data-page="${p}">${p}</button>`;
         }
 
-        // Dernier recours : probe profond sur this.* comme avant
-        try {
-            const probe = this.annualMetrics || this.data || this.metrics || this.state || this;
-            if (probe && typeof probe === 'object') {
-                const out = {};
-                Object.keys(probe).forEach(k => {
-                    const v = probe[k];
-                    if (typeof v === 'number' && !isNaN(v)) out[k] = v;
-                    else if (v && typeof v === 'object') {
-                        const candKeys = ['total', 'annual', 'volume', 'h', 'hTP', 'v', 'value', 'hours'];
-                        for (const ck of candKeys) {
-                            if (v[ck] !== undefined && !isNaN(Number(v[ck]))) {
-                                out[k] = Number(v[ck]);
-                                break;
-                            }
-                        }
-                    }
-                });
-                if (Object.keys(out).length) return out;
-            }
-        } catch (e) {
-            console.warn('VolumeRenderer.getAnnualTeacherVolumes: deep probe failed', e);
+        html += `<button class="pager-btn" data-list="${listName}" data-page="${Math.min(totalPages, currentPage + 1)}" ${currentPage >= totalPages ? 'disabled' : ''}>Next</button>`;
+
+        return html;
+    }
+
+    /**
+     * Handler délégation clics pour pagination
+     */
+    _onPaginationClick(e) {
+        // robust detection
+        const btn = (e.target && typeof e.target.closest === 'function') ? e.target.closest('.pager-btn') : (e.target && e.target.classList && e.target.classList.contains('pager-btn') ? e.target : null);
+        if (!btn) return;
+        if (this.container && !this.container.contains(btn)) return;
+        if (btn.disabled || btn.getAttribute('aria-disabled') === 'true') return;
+
+        const list = btn.getAttribute('data-list');
+        const page = parseInt(btn.getAttribute('data-page'), 10) || 1;
+        if (!list) return;
+
+        this.pageState[list] = page;
+        this.render();
+
+        // scroll to section
+        const sectionSelector = list === 'teachers' ? '.teacher-volumes' : (list === 'subjects' ? '.subject-volumes' : null);
+        if (sectionSelector) {
+            const el = this.container ? this.container.querySelector(sectionSelector) : document.querySelector(sectionSelector);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+
+    /**
+     * Handler pour inputs / selects (recherche, per-page)
+     */
+    _onControlInput(e) {
+        const target = e.target;
+        if (!target) return;
+
+        // teacher search
+        if (target.matches && target.matches('.teacher-search')) {
+            const value = target.value || '';
+            clearTimeout(this._searchDebounce);
+            this._searchDebounce = setTimeout(() => {
+                this.filters.teacherQuery = value;
+                this.pageState.teachers = 1;
+                this.render();
+            }, 200);
+            return;
         }
 
-        return {};
+        // subject search
+        if (target.matches && target.matches('.subject-search')) {
+            const value = target.value || '';
+            clearTimeout(this._searchDebounce);
+            this._searchDebounce = setTimeout(() => {
+                this.filters.subjectQuery = value;
+                this.pageState.subjects = 1;
+                this.render();
+            }, 200);
+            return;
+        }
+
+        // per-page selector
+        if (target.matches && target.matches('.per-page-select')) {
+            const list = target.getAttribute('data-list') || 'subjects';
+            const n = parseInt(target.value, 10) || this.pageSize[list] || 10;
+            this.pageSize[list] = n;
+            this.pageState[list] = 1;
+            this.render();
+            return;
+        }
     }
 }
 
@@ -850,7 +1012,6 @@ const _VolumeRendererInstance = new VolumeRenderer();
 // expose a global reference for code that may access the renderer via a global variable
 if (typeof window !== 'undefined') {
     try {
-        // only set if not already set to avoid clobbering test harnesses
         if (!window.EDTVolumeRenderer) window.EDTVolumeRenderer = _VolumeRendererInstance;
     } catch (e) {
         /* noop - defensive */

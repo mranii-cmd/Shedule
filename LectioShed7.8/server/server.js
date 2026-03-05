@@ -41,24 +41,46 @@ let pool;
 
 /** Initialize DB and ensure tables exist */
 async function initDb() {
-  pool = mysql.createPool(DB_CONFIG);
-  // Create minimal tables
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS global_data (
-      id INT PRIMARY KEY DEFAULT 1,
-      data JSON NOT NULL,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-  `);
+  try {
+    pool = mysql.createPool(DB_CONFIG);
+    
+    // Test connection
+    const connection = await pool.getConnection();
+    await connection.ping();
+    connection.release();
+    
+    // Create minimal tables with error handling
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS global_data (
+        id INT PRIMARY KEY DEFAULT 1,
+        data JSON NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
 
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS sessions (
-      name VARCHAR(191) PRIMARY KEY,
-      data JSON NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-  `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        name VARCHAR(191) PRIMARY KEY,
+        data JSON NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // Table pour stocker l'état par utilisateur (clé = user identifier comme username)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_states (
+        user_id VARCHAR(191) PRIMARY KEY,
+        data JSON NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    
+    console.log('✅ Database initialized successfully');
+  } catch (err) {
+    console.error('❌ Database initialization error:', err.message);
+    throw err;
+  }
 }
 
 initDb().catch(err => {
@@ -67,10 +89,10 @@ initDb().catch(err => {
 });
 
 // ---------- AUTH CONFIG ----------
-// ✅ APRÈS (sécurisé)
+// ✅ Secure JWT configuration
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET || JWT_SECRET.length < 32) {
-  console.error('❌ FATAL: JWT_SECRET must be set in . env (min 32 chars)');
+  console.error('❌ FATAL: JWT_SECRET must be set in .env (min 32 chars)');
   process.exit(1);
 }
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h'; // configurable
@@ -81,27 +103,34 @@ const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH || '';
 
 // Helper: verify admin credentials
 async function verifyAdminCredentials(username, password) {
+  if (!username || !password) return false;
   if (username !== ADMIN_USER) return false;
+  
   // If a bcrypt hash is provided, use it
   if (ADMIN_PASSWORD_HASH && ADMIN_PASSWORD_HASH.length > 0) {
     try {
       return await bcrypt.compare(password, ADMIN_PASSWORD_HASH);
     } catch (e) {
+      console.error('Bcrypt comparison error:', e.message);
       return false;
     }
   }
-  // Fallback: compare plain text
+  
+  // Fallback: compare plain text (use timing-safe comparison)
   if (ADMIN_PASSWORD && ADMIN_PASSWORD.length > 0) {
-    // constant-time comparison
     try {
       const a = Buffer.from(String(password));
       const b = Buffer.from(String(ADMIN_PASSWORD));
       if (a.length !== b.length) return false;
       return cryptoTimingSafeEqual(a, b);
     } catch (e) {
+      console.error('Password comparison error:', e.message);
       return false;
     }
   }
+  
+  // No valid credentials configured
+  console.error('No valid admin credentials configured');
   return false;
 }
 
@@ -143,36 +172,91 @@ function authenticateJWT(req, res, next) {
 
 // ---------- UTILITY DB HELPERS ----------
 async function readGlobal() {
-  const [rows] = await pool.query('SELECT data FROM global_data WHERE id = 1');
-  if (!rows || rows.length === 0) return null;
-  return rows[0].data;
+  try {
+    const [rows] = await pool.query('SELECT data FROM global_data WHERE id = 1');
+    if (!rows || rows.length === 0) return null;
+    return rows[0].data;
+  } catch (err) {
+    console.error('readGlobal error:', err.message);
+    throw err;
+  }
 }
 
 async function writeGlobal(data) {
-  const json = JSON.stringify(data || {});
-  await pool.query('INSERT INTO global_data (id, data) VALUES (1, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)', [json]);
+  try {
+    const json = JSON.stringify(data || {});
+    await pool.query('INSERT INTO global_data (id, data) VALUES (1, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)', [json]);
+  } catch (err) {
+    console.error('writeGlobal error:', err.message);
+    throw err;
+  }
 }
 
 async function readSession(name) {
-  const [rows] = await pool.query('SELECT data FROM sessions WHERE name = ?', [name]);
-  if (!rows || rows.length === 0) return null;
-  return rows[0].data;
+  try {
+    if (!name) throw new Error('Session name is required');
+    const [rows] = await pool.query('SELECT data FROM sessions WHERE name = ?', [name]);
+    if (!rows || rows.length === 0) return null;
+    return rows[0].data;
+  } catch (err) {
+    console.error('readSession error:', err.message);
+    throw err;
+  }
 }
 
 async function writeSession(name, data) {
-  const json = JSON.stringify(data || {});
-  await pool.query('INSERT INTO sessions (name, data) VALUES (?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)', [name, json]);
+  try {
+    if (!name) throw new Error('Session name is required');
+    const json = JSON.stringify(data || {});
+    await pool.query('INSERT INTO sessions (name, data) VALUES (?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)', [name, json]);
+  } catch (err) {
+    console.error('writeSession error:', err.message);
+    throw err;
+  }
 }
 
 async function deleteSession(name) {
-  await pool.query('DELETE FROM sessions WHERE name = ?', [name]);
+  try {
+    if (!name) throw new Error('Session name is required');
+    await pool.query('DELETE FROM sessions WHERE name = ?', [name]);
+  } catch (err) {
+    console.error('deleteSession error:', err.message);
+    throw err;
+  }
 }
 
 async function listSessions() {
-  const [rows] = await pool.query('SELECT name, updated_at FROM sessions ORDER BY updated_at DESC');
-  return rows;
+  try {
+    const [rows] = await pool.query('SELECT name, updated_at FROM sessions ORDER BY updated_at DESC');
+    return rows;
+  } catch (err) {
+    console.error('listSessions error:', err.message);
+    throw err;
+  }
+}
+// ---------- USER STATE HELPERS ----------
+async function readUserState(userId) {
+  try {
+    if (!userId) throw new Error('userId required');
+    const [rows] = await pool.query('SELECT data FROM user_states WHERE user_id = ?', [userId]);
+    if (!rows || rows.length === 0) return null;
+    return rows[0].data;
+  } catch (err) {
+    console.error('readUserState error:', err.message);
+    throw err;
+  }
 }
 
+async function writeUserState(userId, data) {
+  try {
+    if (!userId) throw new Error('userId required');
+    const json = JSON.stringify(data || {});
+    await pool.query('INSERT INTO user_states (user_id, data) VALUES (?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)', [userId, json]);
+  } catch (err) {
+    console.error('writeUserState error:', err.message);
+    throw err;
+  }
+}
 // ---------- AUTH ENDPOINT ----------
 app.post('/api/login', async (req, res) => {
   try {
@@ -268,7 +352,35 @@ app.get('/api/sessions', async (req, res) => {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
+// ---------- USER STATE (protected) ----------
+// GET user's state
+app.get('/api/user/state', authenticateJWT, async (req, res) => {
+  try {
+    // req.user populated by authenticateJWT (we sign token with { username })
+    const userId = req.user && (req.user.username || req.user.id);
+    if (!userId) return res.status(400).json({ ok: false, error: 'user id missing in token' });
+    const state = await readUserState(userId);
+    return res.json({ ok: true, state: state || null });
+  } catch (err) {
+    console.error('GET /api/user/state error:', err);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
+// POST user's state (save/overwrite)
+app.post('/api/user/state', authenticateJWT, async (req, res) => {
+  try {
+    const userId = req.user && (req.user.username || req.user.id);
+    if (!userId) return res.status(400).json({ ok: false, error: 'user id missing in token' });
+    const state = req.body && req.body.state ? req.body.state : null;
+    if (!state) return res.status(400).json({ ok: false, error: 'missing state in body' });
+    await writeUserState(userId, state);
+    return res.json({ ok: true, savedAt: new Date().toISOString() });
+  } catch (err) {
+    console.error('POST /api/user/state error:', err);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
 /* Backup import: accept { global?:{}, sessions?: { name: data, ... }, activeSession? } */
 app.post('/api/backup/import', authenticateJWT, async (req, res) => {
   try {

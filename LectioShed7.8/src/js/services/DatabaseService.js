@@ -75,82 +75,102 @@ function isTokenExpired() {
     }
 }
 
-/**
- * Low-level fetch with timeout, JSON parsing, and Authorization injection.
- */
-async function httpRequest(path, { method = 'GET', body = null, headers = {}, timeout = DEFAULT_TIMEOUT_MS, credentials = 'same-origin' } = {}) {
-    const API_BASE = getApiBase();
-    const url = path.startsWith('http://') || path.startsWith('https://') ? path : `${API_BASE}${path.startsWith('/') ? '' : '/'}${path}`;
+async function httpRequest(path, { method = 'GET', body = null, headers = {}, timeout = DEFAULT_TIMEOUT_MS, credentials = 'same-origin', keepalive = false } = {}) {
+   // Base API : configurable via window.__API_BASE_URL__ (utile pour dev/prod)
+    // Use an explicit localhost backend during local development, otherwise fall back to getApiBase()
+    const API_BASE = (typeof window !== 'undefined' && window.__API_BASE_URL__)
+        ? window.__API_BASE_URL__
+        : (typeof window !== 'undefined' && (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+            ? 'http://localhost:4000'
+            : getApiBase());
 
-    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const id = controller ? setTimeout(() => controller.abort(), timeout) : null;
+    // Si path est une URL absolue, on l'utilise telle quelle.
+    let url = path;
+    if (!/^https?:\/\//i.test(path)) {
+        // normaliser leading slash
+        if (!path.startsWith('/')) path = '/' + path;
 
-    const opts = {
-        method,
-        headers: Object.assign({ 'Accept': 'application/json' }, headers),
-        credentials
-    };
-
-    if (body != null) {
-        if (typeof body === 'string') {
-            opts.body = body;
-            opts.headers['Content-Type'] = opts.headers['Content-Type'] || 'application/json';
+        // Si c'est une route API (commence par /api/), préfixer par API_BASE
+        if (path.startsWith('/api/')) {
+            url = API_BASE.replace(/\/$/, '') + path;
         } else {
-            opts.body = JSON.stringify(body);
-            opts.headers['Content-Type'] = opts.headers['Content-Type'] || 'application/json';
+            // sinon garder le chemin relatif (ex: assets), dirigé vers le serveur courant (localhost:8080)
+            url = path;
         }
     }
 
-    // Attach Authorization header if token present and not expired
+      // Detect API request and inject token if present
+    const isApiRequest = url.startsWith(API_BASE) || /^https?:\/\/[^/]+\/api\//i.test(url) || url.startsWith('/api/');
     try {
-        const token = getToken();
-        if (token && !isTokenExpired()) {
-            opts.headers['Authorization'] = `Bearer ${token}`;
-        } else if (token && isTokenExpired()) {
-            // clear expired token proactively
-            clearToken();
+        if (isApiRequest) {
+            const token = getToken();
+            if (token) {
+                headers = Object.assign({}, headers, { Authorization: `Bearer ${token}` });
+            }
         }
     } catch (e) { /* noop */ }
 
-    if (controller) opts.signal = controller.signal;
+    const init = {
+        method,
+        headers: Object.assign({ 'Accept': 'application/json' }, headers),
+        credentials: isApiRequest ? 'include' : credentials,
+        keepalive: !!keepalive
+    };
 
-    let resp;
+    if (body != null) {
+        if (typeof body === 'object' && !(body instanceof FormData) && !(body instanceof Blob)) {
+            init.body = JSON.stringify(body);
+            init.headers['Content-Type'] = 'application/json';
+        } else {
+            init.body = body;
+        }
+    }
+
+  // When keepalive is requested, don't create an AbortController (browser will handle send during unload).
+    let controller = null;
+    if (!keepalive) {
+        controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        if (controller) {
+            init.signal = controller.signal;
+            setTimeout(() => controller.abort(), timeout);
+        }
+    }
+
+   let res;
     try {
-        resp = await fetch(url, opts);
+        res = await fetch(url, init);
     } catch (err) {
-        if (err && err.name === 'AbortError') {
-            const e = new Error(`Timeout after ${timeout}ms for ${method} ${url}`);
-            e.status = 0;
-            throw e;
-        }
-        throw err;
-    } finally {
-        if (id) clearTimeout(id);
+        // Enrich error with context to help debugging and allow callers to decide
+        const e = new Error('NetworkError when attempting to fetch resource');
+        e.cause = err;
+        // small hint flags:
+        try {
+            const causeMsg = String((err && (err.message || err.name)) || '');
+            if (/NS_BINDING_ABORTED|aborted|Failed to fetch/i.test(causeMsg)) e.abortedByUnload = true;
+        } catch (ee) { /* noop */ }
+        throw e;
     }
 
-    const text = await resp.text().catch(() => null);
+    const contentType = res.headers.get('content-type') || '';
     let parsed = null;
-    if (text) {
-        try { parsed = JSON.parse(text); } catch (e) { parsed = text; }
+    if (contentType.includes('application/json')) {
+        parsed = await res.json().catch(() => null);
+    } else {
+        parsed = await res.text().catch(() => null);
     }
 
-    // Handle unauthorized globally: clear token and surface a 401 error
-    if (!resp.ok) {
-        if (resp.status === 401) {
-            try { clearToken(); } catch (e) { /* noop */ }
-            try { if (typeof window !== 'undefined') window.__edt_authenticated = false; } catch (e) { /* noop */ }
-        }
-        const message = (parsed && parsed.error) ? parsed.error : resp.statusText || `HTTP ${resp.status}`;
-        const err = new Error(`Request failed ${method} ${url}: ${message}`);
-        err.status = resp.status;
+   // If unauthorized, clear stored token (fail-safe) so UI can react
+    if (res.status === 401) {
+        try { clearToken(); } catch (e) { /* noop */ }
+    }
+
+    if (!res.ok) {
+        const err = new Error(parsed && parsed.message ? parsed.message : `HTTP ${res.status}`);
+        err.status = res.status;
         err.response = parsed;
         throw err;
     }
 
-    // Normalize: if server returns { ok: true, data: ... } prefer returning that whole payload
-    if (parsed && typeof parsed === 'object' && ('ok' in parsed || 'data' in parsed)) {
-        return parsed;
-    }
     return parsed;
 }
 
@@ -197,9 +217,9 @@ export default class DatabaseService {
     async login(username, password) {
         if (!username || !password) throw new Error('username and password required');
 
-        // Primary attempt: POST /login
+        // Primary attempt: POST /api/login
         try {
-            const res = await httpRequest('/login', { method: 'POST', body: { username, password } });
+            const res = await httpRequest('/api/login', { method: 'POST', body: { username, password } });
             if (res && res.token) {
                 // if server also returns expiresIn (seconds or ISO), try to store expiry
                 if (res.expiresIn) {
@@ -221,12 +241,12 @@ export default class DatabaseService {
             // If server does not accept POST (405 / "Unsupported method") try GET fallback for legacy/backends.
             const msg = (err && err.message) ? String(err.message) : '';
             const status = err && err.status ? err.status : null;
-            console.warn('DatabaseService.login: POST /login failed', status, msg);
+             console.warn('DatabaseService.login: POST /api/login failed', status, msg);
 
-            const unsupported = status === 405 || /unsupported method/i.test(msg) || /not implemented/i.test(msg);
+           const unsupported = status === 405 || /unsupported method/i.test(msg) || /not implemented/i.test(msg);
             if (unsupported) {
                 try {
-                    const query = `/login?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+                    const query = `/api/login?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
                     const res2 = await httpRequest(query, { method: 'GET' });
                     if (res2 && res2.token) {
                         if (res2.expiresIn) {
@@ -244,7 +264,7 @@ export default class DatabaseService {
                         return { ok: true, token: res2.token, meta: res2 };
                     }
                 } catch (err2) {
-                    console.warn('DatabaseService.login: GET /login fallback also failed', err2 && err2.message);
+                    console.warn('DatabaseService.login: GET /api/login fallback also failed', err2 && err2.message);
                 }
             }
             // Not a supported-method issue or fallback failed -> fall through to potential dev fallback or rethrow
@@ -347,7 +367,18 @@ export default class DatabaseService {
             return true;
         } catch (err) {
             console.error('DatabaseService.save error for', key, err && err.message);
-            throw err;
+        // If we are unloading or the fetch was aborted by navigation, treat it as non-fatal:
+        try {
+            const unloading = (typeof window !== 'undefined' && !!window.__edt_unloading);
+            const causeMsg = String((err && (err.cause && (err.cause.message || err.cause.name))) || (err && err.message) || '');
+            const aborted = !!(err && err.abortedByUnload) || /NS_BINDING_ABORTED|aborted|Failed to fetch|NetworkError/i.test(causeMsg);
+            if (unloading || aborted) {
+                // Log at warn level and return false so callers don't throw
+                console.warn('DatabaseService.save: network aborted or page unloading — ignoring remote save error for', key);
+                return false;
+            }
+        } catch (ee) { /* noop */ }
+        throw err;
         }
     }
 
@@ -365,7 +396,7 @@ export default class DatabaseService {
                     for (const s of list) {
                         const name = typeof s === 'string' ? s : (s.name || null);
                         if (!name) continue;
-                        await httpRequest(`/session/${encodeURIComponent(name)}`, { method: 'DELETE' }).catch(() => null);
+                        await httpRequest(`/api/session/${encodeURIComponent(name)}`, { method: 'DELETE' }).catch(() => null);
                     }
                 }
             } catch (e) {
@@ -388,7 +419,7 @@ export default class DatabaseService {
     // Internal helpers
     async _getGlobalRaw() {
         try {
-            return await httpRequest('/global', { method: 'GET' });
+            return await httpRequest('/api/global', { method: 'GET' });
         } catch (err) {
             // Treat 404 / "File not found" as absent endpoint => return null
             if (err && err.status === 404) {
@@ -403,17 +434,18 @@ export default class DatabaseService {
         }
     }
 
-    async _postGlobal(data) {
-        return await httpRequest('/global', { method: 'POST', body: { data } });
+    async _postGlobal(data, opts = {}) {
+        // opts peut contenir keepalive, timeout, etc.
+        return await httpRequest('/api/global', Object.assign({ method: 'POST', body: { data } }, opts));
     }
 
     async _getSessionRaw(name) {
         if (!name) return null;
-        return await httpRequest(`/session/${encodeURIComponent(name)}`, { method: 'GET' });
+        return await httpRequest(`/api/session/${encodeURIComponent(name)}`, { method: 'GET' });
     }
 
     async _postSessionRaw(name, data) {
         if (!name) throw new Error('_postSessionRaw: name required');
-        return await httpRequest(`/session/${encodeURIComponent(name)}`, { method: 'POST', body: { data } });
+        return await httpRequest(`/api/session/${encodeURIComponent(name)}`, { method: 'POST', body: { data } });
     }
 }

@@ -1,6 +1,4 @@
-import DatabaseService from './services/DatabaseService.js';
-
-const db = new DatabaseService();
+import api from './services/api.js';
 
 const form = document.getElementById('loginForm');
 const errEl = document.getElementById('loginError');
@@ -16,7 +14,11 @@ form.addEventListener('submit', async (e) => {
     return;
   }
   try {
-    await db.login(username, password);
+    // Appel centralisé via services/api.js
+    const result = await api.post('/api/login', { username, password });
+    if (result && result.token) {
+      api.setToken(result.token);
+    }
     // redirect to app root or previous location
     const redirect = new URLSearchParams(window.location.search).get('redirect') || '/';
     window.location.replace(redirect);

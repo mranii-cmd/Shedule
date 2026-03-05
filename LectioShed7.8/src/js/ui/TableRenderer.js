@@ -202,9 +202,9 @@ class TableRenderer {
                 // Comparaison insensible à la casse
                 const match = matiereDept.toLowerCase() === selectedDept.toLowerCase();
 
-                if (!match) {
-                    console.debug(`TableRenderer: Séance filtrée: ${seance.matiere} (dept: ${matiereDept} ≠ ${selectedDept})`);
-                }
+                //if (!match) {
+                  //  console.debug(`TableRenderer: Séance filtrée: ${seance.matiere} (dept: ${matiereDept} ≠ ${selectedDept})`);
+                //}
 
                 return match;
             });

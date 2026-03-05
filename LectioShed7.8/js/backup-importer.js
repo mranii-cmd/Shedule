@@ -165,7 +165,7 @@
         var container = document.querySelector('.actions, .toolbar, .panel-actions') || document.body;
         container.insertBefore(btn, container.firstChild);
       }
-      console.log('backup-importer: bouton indépendant créé ->', btn);
+      //console.log('backup-importer: bouton indépendant créé ->', btn);
       return btn;
     } catch (err) {
       console.warn('backup-importer: createImportBackupButton failed', err);
@@ -238,7 +238,7 @@
         var container = document.querySelector('.actions, .toolbar, .panel-actions') || document.body;
         container.insertBefore(btn, container.firstChild);
       }
-      console.log('backup-importer: bouton Créer Backup créé ->', btn);
+      //console.log('backup-importer: bouton Créer Backup créé ->', btn);
       return btn;
     } catch (err) {
       console.warn('backup-importer: createCreateBackupButton failed', err);

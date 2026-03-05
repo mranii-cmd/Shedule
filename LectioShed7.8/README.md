@@ -126,4 +126,4 @@ Pour questions ou contributions : ouvrir une issue sur le dépôt ou contacter @
 
 ---
 
-(README créé automatiquement par assistant. )
+(README créé automatiquement par assistant. ).  

@@ -762,24 +762,61 @@ class FormManager {
 
         // Optionnel : initialiser la prévisualisation au chargement si les champs ont déjà des valeurs
         this.updateMatiereVHTPreview();
-        // PATCH : Ajoute handler submit matière
-        this._addListener(this.forms.matiere, 'submit', e => {
+        // PATCH : Ajoute handler submit matière (asynchrone et persist)
+        this._addListener(this.forms.matiere, 'submit', async (e) => {
             e.preventDefault();
             const data = this.getMatiereFormData();
             if (!data.nom) {
-                alert("Veuillez saisir le nom de la matière.");
+                DialogManager && DialogManager.error ? DialogManager.error("Veuillez saisir le nom de la matière.") : alert("Veuillez saisir le nom de la matière.");
                 return;
             }
-            if (typeof StateManager.addMatiere === 'function') {
-                StateManager.addMatiere(data.nom, data);
-            } else {
-                if (!StateManager.state.matiereGroupes[data.nom]) {
-                    StateManager.state.matiereGroupes[data.nom] = data;
-                    StateManager.saveState && StateManager.saveState();
+
+            try {
+                // Utiliser StateManager.addMatiere si disponible (meilleure compatibilité)
+                let ok = false;
+                if (typeof StateManager.addMatiere === 'function') {
+                    ok = StateManager.addMatiere(data.nom, data);
+                } else if (typeof StateManager.addSubject === 'function') {
+                    ok = StateManager.addSubject(data.nom, data);
+                } else {
+                    // fallback direct mutation
+                    if (!StateManager.state.matiereGroupes) StateManager.state.matiereGroupes = {};
+                    if (!StateManager.state.matiereGroupes[data.nom]) {
+                        StateManager.state.matiereGroupes[data.nom] = data;
+                        ok = true;
+                    } else {
+                        ok = false;
+                    }
                 }
+
+                if (!ok) {
+                    DialogManager && DialogManager.error ? DialogManager.error(`Matière "${data.nom}" non ajoutée (doublon ou erreur).`) : alert(`Matière "${data.nom}" non ajoutée (doublon ou erreur).`);
+                    return;
+                }
+
+                // Persister et attendre la fin
+                if (typeof StateManager.saveState === 'function') {
+                    try {
+                        await StateManager.saveState();
+                    } catch (errSave) {
+                        console.warn('saveState failed after adding matiere from FormManager', errSave);
+                    }
+                }
+
+                // Reset form and notify
+                this.resetMatiereForm();
+                if (NotificationManager && typeof NotificationManager.success === 'function') {
+                    NotificationManager.success(`Matière "${data.nom}" enregistrée !`);
+                } else {
+                    alert(`Matière "${data.nom}" enregistrée !`);
+                }
+
+                if (window.EDTApp && window.EDTApp.populateFormSelects) window.EDTApp.populateFormSelects();
+
+            } catch (err) {
+                console.error('initializeMatiereForm submit error', err);
+                DialogManager && DialogManager.error ? DialogManager.error('Erreur lors de l\'enregistrement de la matière.') : alert('Erreur lors de l\'enregistrement de la matière.');
             }
-            this.resetMatiereForm();
-            alert("Matière enregistrée !");
         });
     }
 

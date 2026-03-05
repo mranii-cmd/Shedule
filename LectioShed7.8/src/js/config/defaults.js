@@ -77,13 +77,13 @@ export function getDefaultAcademicYear() {
  * Départements disponibles
  */
 export const DEPARTEMENTS = [
-    'Département de physique',
-    'Département de chimie',
+    'Département de Physique',
+    'Département de Chimie',
     'Département de Biologie',
-    'Département de mathématiques',
-    "Département d'informatique",
+    'Département de Mathématiques',
+    "Département d'Informatique",
     'Département de Géologie',
-    'Département Modules Transversaux',
+    'Département Modules Transverseaux',
     'Administration'
 ];
 

@@ -5,9 +5,15 @@
   <meta charset="utf-8" />
   <title>Connexion — Gestion Emploi du Temps v2.9</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <!-- Base href pour résoudre correctement toutes les URLs relatives (utile si la page est ouverte via /login.html?redirect=...) -->
+  <base href="/" />
+  <!-- Précharger l'image de fond depuis le chemin absolu -->
+  <link rel="preload" as="image" href="/assets/bg-calendar.jpg">
+  <!-- Favicon explicite -->
+  <link rel="icon" type="image/png" href="/assets/favicon.png">
   <style>
     :root {
-      --overlay: rgba(255, 255, 255, 0.75);
+      --overlay: rgba(0, 0, 0, 0.35);
       --card-bg: rgba(255, 255, 255, 0.96);
       --accent: #667eea;
       --accent-hover: #764ba2;
@@ -43,10 +49,18 @@
       align-items: center;
       justify-content: center;
       padding: 24px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       min-height: 100vh;
       position: relative;
       overflow: hidden;
+        /* Use a single absolute path to avoid relative requests (which caused the 404). */
+      background-image:
+        linear-gradient(135deg, rgba(102,126,234,0.55), rgba(118,75,162,0.55)),
+        url('/assets/bg-calendar.jpg') center/cover no-repeat;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-size: cover;
+      background-color: #667eea; /* fallback if image unavailable */
+      background-blend-mode: overlay;
     }
 
     /* Animated background shapes */
@@ -451,6 +465,7 @@
     <div class="label">
       <div class="title">Gestion Emploi du Temps</div>
       <div class="version">v2.9 Modulaire</div>
+      <div class="author">I. MRANI</div>
     </div>
   </div>
 

@@ -275,7 +275,7 @@ const ExamHandlers = {
                 const remainingPctEl = document.getElementById('exam-remaining-percentage');
 
                 if (!indicator || !totalCapEl) {
-                    // console.log('[ExamHandlers] Indicator elements not found');
+                     console.log('[ExamHandlers] Indicator elements not found');
                     return;
                 }
 
@@ -335,19 +335,19 @@ const ExamHandlers = {
                 const currentEndTime = document.getElementById('inputExamEnd')?.value || '';
                 const currentExamId = document.getElementById('formAjouterExamen')?.dataset?.editingId || null;
 
-                console.log('[ExamHandlers] Current form values:', {
-                    date: currentDate,
-                    start: currentStartTime,
-                    end: currentEndTime,
-                    editingId: currentExamId
-                });
+                //console.log('[ExamHandlers] Current form values:', {
+                //    date: currentDate,
+                //    start: currentStartTime,
+                //    end: currentEndTime,
+                //    editingId: currentExamId
+                //});
                 // ✅ DEBUG : Vérifier si les valeurs sont vides
-                if (!currentDate || !currentStartTime || !currentEndTime) {
+                //if (!currentDate || !currentStartTime || !currentEndTime) {
                     // console.error('[ExamHandlers] ❌ PROBLÈME : Valeurs du formulaire vides !  ');
                     //console.error('[ExamHandlers] Date input element:', document.getElementById('inputExamDate'));
                     //console.error('[ExamHandlers] Start input element:', document.getElementById('inputExamStart'));
                     //console. error('[ExamHandlers] End input element:', document.getElementById('inputExamEnd'));
-                }
+                //}
                 // ========================================
                 // 3. FONCTION : VÉRIFIER CHEVAUCHEMENT HORAIRE
                 // ========================================
@@ -448,11 +448,11 @@ const ExamHandlers = {
                 let usedCapacity = 0;
                 const allExams = StateManager?.state?.examens || [];
 
-                console.log('[ExamHandlers] Total exams in system:', allExams.length);
+                //console.log('[ExamHandlers] Total exams in system:', allExams.length);
 
                 // Si pas de date/horaire, ne rien compter
                 if (!currentDate || !currentStartTime || !currentEndTime) {
-                    console.log('[ExamHandlers] ⚠️ No date/time selected, showing full capacity');
+                    //console.log('[ExamHandlers] ⚠️ No date/time selected, showing full capacity');
                     usedCapacity = 0;
                 } else {
                     console.log('[ExamHandlers] Filtering exams by slot:', `${currentDate} ${currentStartTime}-${currentEndTime}`);

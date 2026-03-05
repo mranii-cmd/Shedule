@@ -22,10 +22,28 @@ class SessionController {
         // (contenu inchangé)
         const validation = ValidationService.validateSeanceData(formData, allowNoRoom);
 
-        if (!validation.isValid) {
-            ValidationService.highlightFormErrors(
-                validation.missingFields.map(f => `input${f.replace(/\s/g, '')}`)
-            );
+     if (!validation.isValid) {
+            const missingFields = Array.isArray(validation.missingFields) ? validation.missingFields.slice() : [];
+            const ids = missingFields.map(f => `input${String(f || '').replace(/\s/g, '')}`);
+            // Defensive: call highlightFormErrors only if a function is available; else fallback
+            try {
+                if (typeof ValidationService !== 'undefined' && typeof ValidationService.highlightFormErrors === 'function') {
+                    ValidationService.highlightFormErrors(ids);
+                } else if (typeof ValidationService !== 'undefined' && typeof ValidationService.highlightField === 'function') {
+                    ids.forEach(id => { try { ValidationService.highlightField(id, 'Champ requis'); } catch (e) { /* noop */ } });
+                } else {
+                    // final fallback: add simple visual marker to the inputs
+                    ids.forEach(id => {
+                        try {
+                            const el = document.getElementById(id) || document.querySelector(`[name="${id}"]`);
+                            if (el && el.classList) el.classList.add('input-error');
+                        } catch (e) { /* noop per-field */ }
+                    });
+                    console.warn('ValidationService helpers not available; applied DOM fallback for ids:', ids);
+                }
+            } catch (e) {
+                console.warn('Error while attempting to highlight validation errors', e);
+            }
 
             DialogManager.error(
                 `Veuillez remplir les champs manquants : <strong>${validation.missingFields.join(', ')}</strong>.`
@@ -185,7 +203,25 @@ class SessionController {
         // Validation
         const validation = ValidationService.validateSeanceData(formData, options.allowNoRoom || false);
         if (!validation.isValid) {
-            ValidationService.highlightFormErrors(validation.missingFields.map(f => `input${f.replace(/\s/g, '')}`));
+            const missingFields = Array.isArray(validation.missingFields) ? validation.missingFields.slice() : [];
+            const ids = missingFields.map(f => `input${String(f || '').replace(/\s/g, '')}`);
+            try {
+                if (typeof ValidationService !== 'undefined' && typeof ValidationService.highlightFormErrors === 'function') {
+                    ValidationService.highlightFormErrors(ids);
+                } else if (typeof ValidationService !== 'undefined' && typeof ValidationService.highlightField === 'function') {
+                    ids.forEach(id => { try { ValidationService.highlightField(id, 'Champ requis'); } catch (e) { /* noop */ } });
+                } else {
+                    ids.forEach(id => {
+                        try {
+                            const el = document.getElementById(id) || document.querySelector(`[name="${id}"]`);
+                            if (el && el.classList) el.classList.add('input-error');
+                        } catch (e) { /* noop per-field */ }
+                    });
+                    console.warn('ValidationService helpers not available; applied DOM fallback for ids:', ids);
+                }
+            } catch (e) {
+                console.warn('Error while attempting to highlight validation errors', e);
+            }
             DialogManager.error(`Veuillez remplir les champs manquants : <strong>${validation.missingFields.join(', ')}</strong>.`);
             return { success: false, session: null, conflicts: validation.errors };
         }

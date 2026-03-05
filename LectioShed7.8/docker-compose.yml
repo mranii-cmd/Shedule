@@ -6,7 +6,6 @@ services:
     container_name: mysql-edt
     env_file:
       - ./server/.env
-    # Le fichier schema.sql sera exécuté automatiquement au premier démarrage
     volumes:
       - mysql-data:/var/lib/mysql
       - ./server/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
@@ -20,7 +19,7 @@ services:
     restart: unless-stopped
 
   api:
-    build:
+    build: 
       context: ./server
       dockerfile: Dockerfile
     container_name: edt-api
@@ -29,12 +28,20 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-    ports:
+    ports: 
       - "4000:4000"
     restart: unless-stopped
-    # (Optionnel) si tu veux monter le code pour développement en direct, décommente la ligne ci-dessous :
-    # volumes:
-    #   - ./server:/app
+
+  frontend:
+    image: nginx:alpine
+    container_name: edt-frontend
+    ports:
+      - "8080:80"
+    volumes: 
+      - ./:/usr/share/nginx/html:ro
+    depends_on:
+      - api
+    restart: unless-stopped
 
   adminer:
     image: adminer:latest

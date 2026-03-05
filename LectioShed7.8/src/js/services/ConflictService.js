@@ -6,6 +6,9 @@
 import { CRENEAUX_COUPLES_SUIVANT } from '../config/constants.js';
 import ValidationService from './ValidationService.js';
 
+// Toggle verbose debug output for ConflictService (false = silencieux)
+const DEBUG = false;
+
 class ConflictService {
     /**
      * Vérifie tous les conflits pour une séance
@@ -16,39 +19,60 @@ class ConflictService {
      * @returns {Array<string>} Liste des conflits détectés
      */
     checkAllConflicts(session, allSessions, excludeIds = [], sallesInfo = {}) {
-        console.log('[ConflictService] session.allowTimeSlotConflict =', session.allowTimeSlotConflict);
+        // Defensive: ensure session is an object
+        if (!session || typeof session !== 'object') {
+            console.warn('[ConflictService] checkAllConflicts called with undefined/null session', session);
+            try { console.trace && console.trace(); } catch (e) { /* noop */ }
+            return [];
+        }
+
+        // Normalize inputs
         const conflicts = [];
-        const seancesAComparer = Array.isArray(allSessions) ? allSessions.filter(s => !excludeIds.includes(s.id)) : [];
-        // DEBUG: trace candidate + how many sessions will be compared (safe; can be removed later)
+        const all = Array.isArray(allSessions) ? allSessions : [];
+        const excludeSet = new Set((Array.isArray(excludeIds) ? excludeIds : []).map(x => String(x)));
+        const candidateIdStr = session.id != null ? String(session.id) : null;
+        if (candidateIdStr) excludeSet.add(candidateIdStr);
+
+        // Build list of sessions to compare (filtered, distinct from candidate)
+        const seancesAComparer = all.filter(s => s && typeof s === 'object' && s.id != null && !excludeSet.has(String(s.id)));
+
+        // Normalized flag for time-slot-conflict allowance
+        const allowTimeSlotConflict = Boolean(session.allowTimeSlotConflict === true);
+
+        // Debug summary (only if DEBUG enabled)
         try {
-            console.debug && console.debug('[ConflictService] checkAllConflicts called for', {
-                id: session && session.id,
-                matiere: session && session.matiere,
-                jour: session && session.jour,
-                creneau: session && session.creneau,
-                heureDebut: session && session.heureDebut,
-                heureFin: session && session.heureFin,
-                salle: session && session.salle
-            });
-            console.debug && console.debug('[ConflictService] sessions to compare:', seancesAComparer.length);
+            if (DEBUG && console && typeof console.debug === 'function') {
+                console.debug('[ConflictService] checkAllConflicts for', {
+                    id: session.id,
+                    matiere: session.matiere,
+                    jour: session.jour,
+                    creneau: session.creneau,
+                    salle: session.salle,
+                    compareCount: seancesAComparer.length,
+                    excludeIdsPreview: Array.from(excludeSet).slice(0, 5)
+                });
+            }
         } catch (e) { /* ignore logging errors */ }
-        // DEBUG: trace caller candidate + summary of compared sessions
-        try {
-            console.debug('[ConflictService] checkAllConflicts called for session:',
-                { id: session && session.id, matiere: session && session.matiere, jour: session && session.jour, creneau: session && session.creneau, heureDebut: session && session.heureDebut, heureFin: session && session.heureFin, salle: session && session.salle, _candidate: !!session._candidate });
-            console.debug('[ConflictService] number of sessions available to compare:', seancesAComparer.length, 'excludeIds:', excludeIds && excludeIds.slice(0, 5));
-        } catch (e) { /* ignore logging errors */ }
+ 
+        // Early exit if nothing to compare
+        if (!seancesAComparer.length) {
+            if (DEBUG && console && typeof console.debug === 'function') {
+                console.debug('[ConflictService] no sessions to compare for', session.id);
+            }
+            return [];
+        }
+
         // 1. Vérifier les conflits enseignants
         conflicts.push(...this.checkTeacherConflicts(session, seancesAComparer));
 
         // 2. Conflits de salle et de groupe — basés sur chevauchement réel
-        conflicts.push(...this.checkRoomAndGroupConflicts(session, seancesAComparer, sallesInfo));
+        conflicts.push(...this.checkRoomAndGroupConflicts(session, seancesAComparer, sallesInfo, allowTimeSlotConflict));
 
         // 3. Conflit de section (Cours vs TD/TP)
-        conflicts.push(...this.checkSectionConflicts(session, seancesAComparer));
+        conflicts.push(...this.checkSectionConflicts(session, seancesAComparer, allowTimeSlotConflict));
 
         // 4. Conflit de doublon
-        conflicts.push(...this.checkDuplicateConflicts(session, seancesAComparer));
+        conflicts.push(...this.checkDuplicateConflicts(session, seancesAComparer, allowTimeSlotConflict));
 
         // Retourner uniquement les conflits uniques (texte)
         return [...new Set(conflicts)].filter(Boolean);
@@ -61,13 +85,14 @@ class ConflictService {
      * @returns {Array<string>} Les conflits
      */
     checkTeacherConflicts(session, seancesAComparer) {
+        if (!session) return [];
         const conflicts = [];
 
-        for (const teacher of session.enseignantsArray) {
+        for (const teacher of session.enseignantsArray || []) {
             if (!teacher) continue;
 
             if (!this.isTeacherAvailable(teacher, session.jour, session.creneau, session.type, seancesAComparer)) {
-                conflicts.push(`❌ CONFLIT ENSEIGNANT: **${teacher}** est déjà occupé(e) sur ce créneau.`);
+                conflicts.push(`❌ CONFLIT ENSEIGNANT:  **${teacher}** est déjà occupé(e) sur ce créneau. `);
             }
         }
 
@@ -91,7 +116,7 @@ class ConflictService {
             if (!Array.isArray(s.enseignantsArray) || s.enseignantsArray.length === 0) continue;
             if (!s.enseignantsArray.includes(teacher)) continue;
 
-            // Conflit direct: même créneau de départ
+            // Conflit direct:  même créneau de départ
             if (s.creneau === creneau) return false;
 
             // Conflits liés aux TP couplés (vérifier dans les deux sens)
@@ -112,18 +137,21 @@ class ConflictService {
      */
     /**
      * Vérifie les conflits de salle et de groupe
-     * Maintenant : se base sur doSessionsOverlap() pour déterminer si deux séances se chevauchent réellement.
+     * Maintenant :  se base sur doSessionsOverlap() pour déterminer si deux séances se chevauchent réellement. 
      * @param {Session} session - La séance
      * @param {Array<Session>} seancesAComparer - Les séances à comparer
      * @param {Object} sallesInfo - Informations sur les salles
      * @returns {Array<string>} Les conflits
      */
     checkRoomAndGroupConflicts(session, seancesAComparer, sallesInfo = {}) {
+        if (!session) return [];
         const conflicts = [];
+        const allowTimeSlotConflict = Boolean(session.allowTimeSlotConflict === true);
+       // If candidate has no salle, we can skip room-specific checks (only group/teacher/duplicate remain relevant).
+        const candidateHasSalle = !!(session.salle && String(session.salle).trim() !== '');
+        try { if (DEBUG && console && typeof console.debug === 'function') console.debug('[ConflictService] checkRoomAndGroupConflicts sessionId=', session.id, 'compareCount=', (seancesAComparer || []).length); } catch (e) { }
 
-        try { console.debug && console.debug('[ConflictService] checkRoomAndGroupConflicts sessionId=', session && session.id, 'compareCount=', (seancesAComparer || []).length); } catch (e) { }
-
-        for (const s of seancesAComparer || []) {
+        for (const s of seancesAComparer) {
             if (!s || !s.jour || s.jour !== session.jour) continue;
 
             // Déterminer si les deux séances se chevauchent réellement
@@ -145,25 +173,25 @@ class ConflictService {
 
             if (!overlap) continue;
 
-            // Conflit de salle : ignorer si allowTimeSlotConflict actif (case cochée)
-            if (!session.allowTimeSlotConflict) {
-                if (s.salle && session.salle && String(s.salle).trim().toUpperCase() === String(session.salle).trim().toUpperCase()) {
-                    try { console.debug && console.debug('[ConflictService] ROOM CONFLICT: candidateId=', session && session.id, 'existingId=', s && s.id, 'salle=', s && s.salle); } catch (e) { }
+        // Conflit de salle : ignorer si allowTimeSlotConflict actif (case cochée)
+            // Et ne traiter la vérification de salle que si la séance candidate a une salle renseignée.
+            if (!allowTimeSlotConflict && candidateHasSalle) {
+                if (s.salle && String(s.salle).trim() !== '' && String(s.salle).trim().toUpperCase() === String(session.salle).trim().toUpperCase()) {
+                    try { if (DEBUG && console && typeof console.debug === 'function') console.debug('[ConflictService] ROOM CONFLICT: candidateId=', session.id, 'existingId=', s.id, 'salle=', s.salle); } catch (e) { }
                     const room = s.salle;
                     const mat = s.matiere || '(matière inconnue)';
                     const grp = s.groupe || s.section || s.uniqueStudentEntity || '';
-                    conflicts.push(`❌ CONFLIT SALLE: La salle **${room}** est déjà utilisée sur ce créneau par ${mat}${grp ? ` (${grp})` : ''}.`);
+                    conflicts.push(`❌ CONFLIT SALLE: La salle **${room}** est déjà utilisée sur ce créneau par ${mat}${grp ?  ` (${grp})` : ''}.`);
                 }
             }
 
             // CONFLIT DE GROUPE : ignorer si allowTimeSlotConflict actif
-            if (
-                !session.allowTimeSlotConflict &&
+            if (!allowTimeSlotConflict &&
                 s.uniqueStudentEntity &&
                 session.uniqueStudentEntity &&
                 s.uniqueStudentEntity === session.uniqueStudentEntity
             ) {
-                try { console.debug && console.debug('[ConflictService] GROUP CONFLICT: candidateId=', session && session.id, 'existingId=', s && s.id, 'group=', s && s.uniqueStudentEntity); } catch (e) { }
+                  try { if (DEBUG && console && typeof console.debug === 'function') console.debug('[ConflictService] GROUP CONFLICT: candidateId=', session.id, 'existingId=', s.id, 'group=', s.uniqueStudentEntity); } catch (e) { }
                 conflicts.push(`❌ CONFLIT GROUPE: Le groupe **${s.uniqueStudentEntity}** est déjà occupé sur ce créneau (${s.matiere || ''}).`);
             }
         }
@@ -185,6 +213,7 @@ class ConflictService {
      * @returns {Array<string>} Les conflits
      */
     checkSectionConflicts(session, seancesAComparer) {
+        if (!session) return [];
         const conflicts = [];
 
         const chevauchement = seancesAComparer.find(s => {
@@ -204,22 +233,23 @@ class ConflictService {
         });
 
         // CONFLIT DE SECTION : ignorer si allowTimeSlotConflict actif
-        if (!session.allowTimeSlotConflict && chevauchement) {
-            conflicts.push(`❌ CONFLIT SECTION: Un **${chevauchement.type}** est déjà programmé pour la section **${session.section}**. Impossible de programmer un ${session.type} en parallèle.`);
+       const allowTimeSlotConflict = Boolean(session.allowTimeSlotConflict === true);
+        if (!allowTimeSlotConflict && chevauchement) {
+            conflicts.push(`❌ CONFLIT SECTION: Un **${chevauchement.type}** est déjà programmé pour la section **${session.section}**.  Impossible de programmer un ${session.type} en parallèle.`);
         }
 
         return conflicts;
     }
 
     /**
-     * Convertit un libellé de créneau (ex: "8h30", "10:15", "08:30") en minutes depuis minuit.
+     * Convertit un libellé de créneau (ex: "8h30", "10:15", "08:30") en minutes depuis minuit. 
      * Retourne null si le format n'est pas reconnu.
      * @param {string} label
      * @returns {number|null}
      */
     parseCreneauToMinutes(label) {
         if (!label || typeof label !== 'string') return null;
-        // Normaliser : accepter "8h30", "08:30", "10h15", "10:15", "8:30"
+        // Normaliser :  accepter "8h30", "08:30", "10h15", "10:15", "8: 30"
         const normalized = label.replace(/\s+/g, '').replace('H', 'h').replace(':', 'h');
         const match = normalized.match(/^(\d{1,2})h(\d{1,2})$/i);
         if (!match) return null;
@@ -230,7 +260,7 @@ class ConflictService {
     }
 
     /**
-     * Détermine si deux séances se chevauchent temporellement.
+     * Détermine si deux séances se chevauchent temporellement. 
      * Utilise dureeAffichee (heures) si disponible, sinon considère 1 heure par défaut.
      * Essaie d'utiliser les minutes extraites des labels de créneaux; si non-parsable,
      * retombe sur la logique de paires CRENEAUX_COUPLES_SUIVANT.
@@ -293,6 +323,7 @@ class ConflictService {
      * @returns {Array<string>} Les conflits
      */
     checkDuplicateConflicts(session, seancesAComparer) {
+        if (!session) return [];
         const conflicts = [];
 
         const seanceIdentique = (seancesAComparer || []).find(s => {
@@ -308,7 +339,7 @@ class ConflictService {
                 if (this.doSessionsOverlap(s, session)) return true;
             } catch (e) { /* ignore */ }
 
-            // gestion legacy TP-couplé : si paired creneaux, first vs second => pas doublon
+            // gestion legacy TP-couplé :  si paired creneaux, first vs second => pas doublon
             if ((session.type || '').toString().toLowerCase().includes('tp')) {
                 const paired = (typeof CRENEAUX_COUPLES_SUIVANT !== 'undefined') &&
                     (CRENEAUX_COUPLES_SUIVANT[s.creneau] === session.creneau || CRENEAUX_COUPLES_SUIVANT[session.creneau] === s.creneau);
@@ -322,10 +353,11 @@ class ConflictService {
             return false;
         });
 
-        // CONFLIT DE DOUBLON : ignorer si allowTimeSlotConflict actif
-        if (!session.allowTimeSlotConflict && seanceIdentique) {
+        const allowTimeSlotConflict = Boolean(session.allowTimeSlotConflict === true);
+        // CONFLIT DE DOUBLON :  ignorer si allowTimeSlotConflict actif
+        if (!allowTimeSlotConflict && seanceIdentique) {
             if ((session.type || '').toLowerCase().includes('cours')) {
-                conflicts.push(`❌ CONFLIT DE DOUBLON: La **${session.section}** a déjà un **Cours** pour la matière **${session.matiere}**.`);
+                conflicts.push(`❌ CONFLIT DE DOUBLON: La **${session.section}** a déjà un **Cours** pour la matière **${session.matiere}**. `);
             } else {
                 conflicts.push(`❌ CONFLIT DE DOUBLON: Le groupe **${session.uniqueStudentEntity}** a déjà une séance de **${session.type}** pour la matière **${session.matiere}**.`);
             }

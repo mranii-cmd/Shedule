@@ -153,19 +153,107 @@ class SchedulingHandlers {
         NotificationManager.info('Analyse de l\'emploi du temps en cours...');
         SpinnerManager.show();
 
-        setTimeout(() => {
+         setTimeout(async () => {
             try {
                 // Récupérer options depuis l'UI
                 const opts = this.getOptimizationOptions();
 
                 // Lancer l'optimisation (dry-run pour la prévisualisation)
                 const previewOpts = Object.assign({}, opts, { dryRun: true, sallesInfo: StateManager.state?.sallesInfo || {} });
-                const result = ScheduleOptimizerService.optimizeSchedule(previewOpts);
+                // Call optimizer and await if it returns a Promise (some implementations return either sync object or a Promise)
+                let maybePromise;
+                try {
+                    maybePromise = (ScheduleOptimizerService && typeof ScheduleOptimizerService.optimizeSchedule === 'function')
+                        ? ScheduleOptimizerService.optimizeSchedule(previewOpts)
+                        : null;
+                } catch (callErr) {
+                    SpinnerManager.hide();
+                    console.error('[SchedulingHandlers] ScheduleOptimizerService.optimizeSchedule threw synchronously:', callErr);
+                    DialogManager.error('Erreur d\'optimisation', callErr && (callErr.message || String(callErr)) || 'Erreur interne');
+                    return;
+                }
+
+                let result;
+                try {
+                    result = (maybePromise && typeof maybePromise.then === 'function') ? await maybePromise : maybePromise;
+                } catch (awaitErr) {
+                    SpinnerManager.hide();
+                    console.error('[SchedulingHandlers] ScheduleOptimizerService.optimizeSchedule rejected:', awaitErr);
+                    const msg = awaitErr && (awaitErr.message || awaitErr.toString()) ? (awaitErr.message || String(awaitErr)) : 'Une erreur interne est survenue pendant l\'optimisation.';
+                    DialogManager.error('Erreur d\'optimisation', msg);
+                    return;
+                }
 
                 SpinnerManager.hide();
 
-                if (!result.success) {
-                    DialogManager.error('Erreur d\'optimisation', result.error || 'Une erreur est survenue');
+                 // Defensive handling: persist result for debugging and accept result as usable
+                // when either result.success === true OR optimizedSeances is present.
+                try {
+                    // persist a JSON-safe shallow copy to help debugging from the console
+                    try {
+                        window.__lastOptimizationResult = JSON.parse(JSON.stringify(result, (k, v) => typeof v === 'function' ? '[Function]' : v));
+                    } catch (e) {
+                        // fallback: keep raw result reference (non-serializable)
+                        window.__lastOptimizationResult = result;
+                    }
+                    window.__lastOptimizationResultAt = new Date().toISOString();
+                } catch (e) { /* noop */ }
+
+                if (!result) {
+                    DialogManager.error('Erreur d\'optimisation', 'Aucun résultat reçu de l\'optimiseur.');
+                    return;
+                }
+
+                const hasOptimized = Array.isArray(result.optimizedSeances) && result.optimizedSeances.length > 0;
+
+                // Explicit failure returned by optimizer -> show error
+                if (result.success === false) {
+                    DialogManager.error('Erreur d\'optimisation', result.error || result.message || 'Une erreur est survenue');
+                    return;
+                }
+
+               // DEBUG: log/record ambiguous result before deciding to show error
+                try {
+                    // keep a reference for quick inspection in the console (dev-only)
+                    try {
+                        window.__lastOptimizationResult = JSON.parse(JSON.stringify(result, (k, v) => typeof v === 'function' ? '[Function]' : v));
+                    } catch (e) {
+                        // if non-serializable, keep raw reference
+                        window.__lastOptimizationResult = result;
+                    }
+                    window.__lastOptimizationResultAt = new Date().toISOString();
+
+                    console.group('[SchedulingHandlers][DEBUG] ambiguous optimization result');
+                    console.log('hasOptimized:', hasOptimized);
+                    console.log('result (summary):', {
+                        success: result && typeof result.success !== 'undefined' ? result.success : null,
+                        optimizedSeancesLength: Array.isArray(result && result.optimizedSeances) ? result.optimizedSeances.length : null,
+                        validation: result && result.validation ? result.validation : null,
+                        error: result && (result.error || result.message) ? (result.error || result.message) : null
+                    });
+                    console.log('result (raw):', result);
+                    console.trace();
+                    console.groupEnd();
+                } catch (e) {
+                    console.warn('[SchedulingHandlers][DEBUG] failed to record ambiguous result', e);
+                }
+
+                // Now decide: explicit failure -> show error; ambiguous -> show error but with debug details
+                if (result && result.success === false) {
+                    DialogManager.error('Erreur d\'optimisation', result.error || result.message || 'Une erreur est survenue');
+                    return;
+                }
+
+                if (!result || (!result.success && !hasOptimized)) {
+                    // show debug-friendly message so we can see what's happening in prod/dev
+                    const debugSummary = {
+                        success: result && typeof result.success !== 'undefined' ? result.success : null,
+                        optimizedSeancesLength: Array.isArray(result && result.optimizedSeances) ? result.optimizedSeances.length : null,
+                        validation: result && result.validation ? result.validation : null,
+                        error: result && (result.error || result.message) ? (result.error || result.message) : null,
+                    };
+                    console.error('[SchedulingHandlers] No usable optimization result (debug):', debugSummary, result);
+                    DialogManager.error('Erreur d\'optimisation', `<div>Aucun résultat d'optimisation disponible</div><pre style="white-space:pre-wrap;">${JSON.stringify(debugSummary, null, 2)}</pre>`);
                     return;
                 }
 
@@ -365,49 +453,194 @@ class SchedulingHandlers {
         NotificationManager.info('Detection des conflits en cours...');
         SpinnerManager.show();
 
-        setTimeout(() => {
+         setTimeout(async () => {
             try {
-                const conflictsFound = [];
+                // Récupérer options depuis l'UI
+                const opts = this.getOptimizationOptions();
 
-                // Détecter les conflits
-                seances.forEach(seance => {
-                    const conflicts = ConflictService.checkAllConflicts(
-                        seance,
-                        seances,
-                        [seance.id],
-                        StateManager.state.sallesInfo
-                    ) || [];
+                // Lancer l'optimisation (dry-run pour la prévisualisation)
+                const previewOpts = Object.assign({}, opts, { dryRun: true, sallesInfo: StateManager.state?.sallesInfo || {} });
 
-                    if (conflicts.length > 0) {
-                        conflictsFound.push({ seance, conflicts });
-                    }
-                });
-
-                SpinnerManager.hide();
-
-                if (conflictsFound.length === 0) {
-                    NotificationManager.success('Aucun conflit detecte ! ');
-                    LogService.info('EDT verifie : aucun conflit');
+                let result;
+                try {
+                    // Await the optimizer (it returns a Promise)
+                    result = await ScheduleOptimizerService.optimizeSchedule(previewOpts);
+                } catch (err) {
+                    SpinnerManager.hide();
+                    console.error('[SchedulingHandlers] ScheduleOptimizerService.optimizeSchedule rejected:', err);
+                    // Provide a more informative dialog if available
+                    const msg = err && (err.message || err.toString()) ? (err.message || String(err)) : 'Une erreur interne est survenue pendant l\'optimisation.';
+                    DialogManager.error('Erreur d\'optimisation', msg);
                     return;
                 }
 
-                const summary = this._buildConflictsSummary(conflictsFound);
+                SpinnerManager.hide();
 
+                // Defensive: ensure we got an object result
+               // Robust handling of optimization result:
+                // - await the optimizer reliably,
+                // - persist a JSON-safe debug copy on window,
+                // - display validation errors clearly,
+                // - force preview if we have optimizedSeances even when success flag is not truthy.
+                //
+                // This block replaces the previous fragile handling and centralizes error/preview logic.
+                try {
+                    // Persist JSON-safe debug copy
+                    try {
+                        window.__lastOptimizationResult = JSON.parse(JSON.stringify(result, (k, v) => typeof v === 'function' ? '[Function]' : v));
+                    } catch (e) {
+                        window.__lastOptimizationResult = {
+                            success: !!(result && result.success),
+                            error: result && (result.error || result.message),
+                            validation: result && result.validation,
+                            optimizedSeancesLength: Array.isArray(result && result.optimizedSeances) ? result.optimizedSeances.length : null
+                        };
+                    }
+                    window.__lastOptimizationResultAt = new Date().toISOString();
+                    console.group('[SchedulingHandlers] optimizeSchedule result summary');
+                    console.log('success:', result && result.success);
+                    console.log('validation:', result && result.validation);
+                    console.log('optimizedSeances length:', Array.isArray(result && result.optimizedSeances) ? result.optimizedSeances.length : 'n/a');
+                    console.groupEnd();
+                } catch (e) {
+                    console.error('[SchedulingHandlers] failed to persist/inspect optimization result', e);
+                }
+
+                // If there are validation errors, show them (but allow preview for debugging)
+                try {
+                    const valErrs = result && result.validation && Array.isArray(result.validation.errors) ? result.validation.errors : null;
+                    if (valErrs && valErrs.length) {
+                        const detailHtml = `<div style="text-align:left; max-height:220px; overflow:auto; margin-top:10px;"><strong>Erreurs de validation :</strong><pre style="white-space:pre-wrap;">${valErrs.slice(0,50).join('\n')}</pre></div>`;
+                        // Show validation errors clearly
+                        DialogManager.error('Erreurs de validation lors de l\'optimisation', detailHtml);
+                        // still offer preview for debug if optimizedSeances exist
+                        if (Array.isArray(result.optimizedSeances) && result.optimizedSeances.length) {
+                            const svc = window.ScheduleOptimizerService;
+                            const reportHtml = (svc && typeof svc.generateOptimizationReport === 'function')
+                                ? svc.generateOptimizationReport(result)
+                                : `<pre>${JSON.stringify({ success: result.success, validation: result.validation, improvement: result.improvement }, null, 2)}</pre>`;
+                            DialogManager.confirm('Prévisualisation (avec erreurs)', reportHtml, () => {
+                                try { svc && typeof svc.applyOptimizedSchedule === 'function' && svc.applyOptimizedSchedule(result, { saveBackup: true }); } catch (e) { DialogManager.error('Erreur', String(e)); }
+                            }, () => {});
+                        }
+                        return;
+                    }
+                } catch (e) {
+                    console.warn('[SchedulingHandlers] reading validation errors failed', e);
+                }
+
+                // If result is usable (success or optimizedSeances present) show preview
+                if (result && (result.success || (Array.isArray(result.optimizedSeances) && result.optimizedSeances.length))) {
+                    try {
+                        const svc = window.ScheduleOptimizerService;
+                        const reportHtml = (svc && typeof svc.generateOptimizationReport === 'function')
+                            ? svc.generateOptimizationReport(result)
+                            : `<pre>${JSON.stringify({ success: result.success, validation: result.validation, improvement: result.improvement }, null, 2)}</pre>`;
+
+                        DialogManager.confirm('Prévisualisation : optimisation', reportHtml, async () => {
+                            try {
+                                if (svc && typeof svc.applyOptimizedSchedule === 'function') {
+                                    const applied = await svc.applyOptimizedSchedule(result, { saveBackup: true });
+                                    console.log('[SchedulingHandlers] applyOptimizedSchedule returned', applied);
+                                } else {
+                                    console.warn('[SchedulingHandlers] applyOptimizedSchedule not available on service');
+                                }
+                            } catch (e) {
+                                console.error('[SchedulingHandlers] applyOptimizedSchedule failed', e);
+                                DialogManager.error('Erreur', String(e && (e.message || e)));
+                            }
+                        }, () => {
+                            console.info('Prévisualisation annulée');
+                        });
+                        return;
+                    } catch (e) {
+                        console.error('[SchedulingHandlers] failed to build/show preview', e);
+                        DialogManager.error('Erreur d\'optimisation', 'Impossible d\'afficher la prévisualisation (voir la console).');
+                        return;
+                    }
+                }
+
+               // Fallback: no usable result — provide debug details (temporary, remove after fix)
+                try {
+                    const debugSummary = {
+                        success: result && typeof result.success !== 'undefined' ? result.success : null,
+                        optimizedSeancesLength: Array.isArray(result && result.optimizedSeances) ? result.optimizedSeances.length : null,
+                        validation: result && result.validation ? result.validation : null,
+                        error: result && (result.error || result.message) ? (result.error || result.message) : null,
+                    };
+                    console.error('[SchedulingHandlers] No usable optimization result (debug):', debugSummary, result);
+
+                    const detailHtml = `<div style="text-align:left; max-height:320px; overflow:auto; margin-top:8px;"><strong>Détails (debug)</strong><pre style="white-space:pre-wrap;">${JSON.stringify(debugSummary, null, 2)}</pre><p style="font-size:0.9em;color:#666">Objet complet disponible dans la console (window.__lastOptimizationResult si présent).</p></div>`;
+                    DialogManager.error('Erreur d\'optimisation', `<div>Aucun résultat d'optimisation disponible</div>${detailHtml}`);
+                } catch (e) {
+                    console.error('[SchedulingHandlers] fallback error while reporting optimization failure', e);
+                }
+
+                // Construire le résumé HTML (avec détails de conflits plus précis)
+                const summary = this._buildOptimizationSummary(result);
+
+                // Ajout : collecter messages de conflits détaillés (ex. provenant de ConflictService) pour la prévisualisation
+                const detailedConflicts = this._collectDetailedConflicts(result.optimizedSeances, previewOpts);
+                const detailedHtml = detailedConflicts.length ? `<div style="margin-top:12px;"><strong>Conflits détectés (exemples) :</strong><ul style="margin-top:8px;">${detailedConflicts.slice(0,10).map(m => `<li style="color:#721c24;">${m}</li>`).join('')}</ul></div>` : '';
+
+                // Afficher le dialogue de confirmation (prévisualisation)
                 DialogManager.confirm(
-                    'Resolution des conflits',
-                    summary,
-                    () => {
-                        this._autoResolveConflicts(conflictsFound, seances);
+                    'Optimisation de l\'emploi du temps',
+                    summary + detailedHtml,
+                    async () => {
+                        // Appliquer les changements en appelant l'API de l'optimizer (qui gère backup + save)
+                        try {
+                            SpinnerManager.show();
+
+                            // applyOptimizedSchedule may be async; await it defensively
+                            let applied = false;
+                            try {
+                                applied = await ScheduleOptimizerService.applyOptimizedSchedule(result, { saveBackup: true });
+                            } catch (applyErr) {
+                                SpinnerManager.hide();
+                                console.error('[SchedulingHandlers] applyOptimizedSchedule failed:', applyErr);
+                                DialogManager.error('Erreur', 'Impossible d\'appliquer l\'optimisation : ' + (applyErr && (applyErr.message || String(applyErr))));
+                                return;
+                            }
+
+                            SpinnerManager.hide();
+
+                            if (applied) {
+                                // Rafraîchir l'UI
+                                TableRenderer.render();
+
+                                const scoreImprovement = result.improvement && typeof result.improvement.score === 'number' ? result.improvement.score : 0;
+                                const icon = scoreImprovement > 0 ? 'OK' : scoreImprovement < 0 ? 'WARN' : 'INFO';
+
+                                NotificationManager.success(
+                                    `${icon} Emploi du temps optimisé !  Score : ${result.optimizedStats.globalScore.toFixed(1)}/100 ` +
+                                    `(${scoreImprovement > 0 ? '+' : ''}${scoreImprovement.toFixed(1)} points)`
+                                );
+
+                                LogService.info('Optimisation appliquée :');
+                                try {
+                                    LogService.info(`  - Score : ${result.currentStats.globalScore.toFixed(1)} -> ${result.optimizedStats.globalScore.toFixed(1)}`);
+                                    LogService.info(`  - Conflits résolus : ${result.improvement.conflicts}`);
+                                    LogService.info(`  - Trous supprimés : ${result.improvement.gaps}`);
+                                } catch (e) { /* ignore logging formatting errors */ }
+                            } else {
+                                DialogManager.error('Erreur', 'Impossible d\'appliquer l\'optimisation (voir logs).');
+                            }
+                        } catch (error) {
+                            SpinnerManager.hide();
+                            console.error('[SchedulingHandlers] Error applying optimization:', error);
+                            DialogManager.error('Erreur', 'Impossible d\'appliquer l\'optimisation : ' + (error && error.message ? error.message : String(error)));
+                        }
                     },
                     () => {
-                        NotificationManager.info('Resolution annulee');
+                        NotificationManager.info('Optimisation annulée');
                     }
                 );
 
             } catch (error) {
                 SpinnerManager.hide();
-                LogService.error(`Erreur lors de la detection des conflits : ${error.message}`);
-                DialogManager.error('Erreur', error.message);
+                LogService.error(`Erreur lors de l'optimisation : ${error && error.message ? error.message : String(error)}`);
+                DialogManager.error('Erreur', `Impossible d'optimiser l'emploi du temps : ${error && error.message ? error.message : String(error)}`);
             }
         }, 300);
     }

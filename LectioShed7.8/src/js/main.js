@@ -17,6 +17,7 @@ import RoomController from './controllers/RoomController.js';
 import ForfaitController from './controllers/ForfaitController.js';
 import StorageService from './services/StorageService.js';
 import LogService from './services/LogService.js';
+import AutoSyncService from './services/AutoSyncService.js';
 import ConflictService from './services/ConflictService.js';
 import VolumeService from './services/VolumeService.js';
 import DialogManager from './ui/DialogManager.js';
@@ -53,7 +54,7 @@ import ExamRoomAllocatorIntegration from './ui/ExamRoomAllocatorIntegration.js';
 import './utils/attemptSaveSession.js';
 import './ui/BackupModal.js';
 import DatabaseService from './services/DatabaseService.js';
-
+import SaveStatusIndicator from './ui/SaveStatusIndicator.js';
 
 /**
  * Configuration: contrôler l'exposition globale
@@ -92,14 +93,30 @@ function setInputValue(id, value) {
  * Utilitaires DOM sûrs — éviter innerHTML quand possible
  */
 function createOption({ value = '', text = '', attrs = {} } = {}) {
+    try {
+        const opt = document.createElement('option');
+        opt.value = String(value ?? '');
+        // textContent protège contre injection
+        opt.textContent = String(text ?? '');
+        Object.entries(attrs).forEach(([k, v]) => {
+            if (v === true) opt.setAttribute(k, '');
+            else if (v !== false && v !== undefined && v !== null) opt.setAttribute(k, String(v));
+        });
+        return opt;
+    } catch (e) {
+        console.error('createOption error:', e);
+        // Return minimal option as fallback - extracted to avoid duplication
+        return createMinimalOption();
+    }
+}
+
+/**
+ * Helper to create a minimal option element (used as fallback)
+ */
+function createMinimalOption() {
     const opt = document.createElement('option');
-    opt.value = value;
-    // textContent protège contre injection
-    opt.textContent = text;
-    Object.entries(attrs).forEach(([k, v]) => {
-        if (v === true) opt.setAttribute(k, '');
-        else if (v !== false && v !== undefined && v !== null) opt.setAttribute(k, String(v));
-    });
+    opt.value = '';
+    opt.textContent = '';
     return opt;
 }
 
@@ -112,18 +129,39 @@ function createOption({ value = '', text = '', attrs = {} } = {}) {
  * - makeAttrsFn: fn(item) => { attrName: attrValue } (optionnel)
  */
 function populateSelectSafe(selectEl, items = [], valueFn = x => x, textFn = x => x, makeAttrsFn = null, emptyLabel = '-- Sélectionner --') {
-    if (!selectEl) return;
-    // vider en utilisant DOM
-    while (selectEl.firstChild) selectEl.removeChild(selectEl.firstChild);
-    selectEl.appendChild(createOption({ value: '', text: emptyLabel }));
+    if (!selectEl) {
+        console.warn('populateSelectSafe: selectEl is null');
+        return;
+    }
 
-    items.forEach(item => {
-        const value = valueFn(item);
-        const text = textFn(item);
-        const attrs = makeAttrsFn ? makeAttrsFn(item) : {};
-        const opt = createOption({ value: value === undefined || value === null ? '' : value, text: text || '', attrs });
-        selectEl.appendChild(opt);
-    });
+    try {
+        // vider en utilisant DOM
+        while (selectEl.firstChild) selectEl.removeChild(selectEl.firstChild);
+        selectEl.appendChild(createOption({ value: '', text: emptyLabel }));
+
+        if (!Array.isArray(items)) {
+            console.warn('populateSelectSafe: items is not an array');
+            return;
+        }
+
+        items.forEach((item, index) => {
+            try {
+                const value = valueFn(item);
+                const text = textFn(item);
+                const attrs = makeAttrsFn ? makeAttrsFn(item) : {};
+                const opt = createOption({
+                    value: value === undefined || value === null ? '' : value,
+                    text: text || '',
+                    attrs
+                });
+                selectEl.appendChild(opt);
+            } catch (e) {
+                console.error(`populateSelectSafe: error processing item at index ${index}:`, e);
+            }
+        });
+    } catch (e) {
+        console.error('populateSelectSafe: error:', e);
+    }
 }
 
 /**
@@ -137,6 +175,108 @@ function debounce(fn, wait = 500) {
         timer = setTimeout(() => fn.apply(ctx, args), wait);
     };
 }
+// --- ETABLISSEMENT: inject & init input between Session and Département ---
+(window.injectAndInitEtablissementField = function injectAndInitEtablissementField() {
+    // debounce helper
+    const debounceLocal = (fn, wait = 600) => {
+        let t;
+        return (...args) => {
+            clearTimeout(t);
+            t = setTimeout(() => fn.apply(this, args), wait);
+        };
+    };
+
+    const createFieldNode = () => {
+        const wrapper = document.createElement('div');
+        const label = document.createElement('label');
+        label.setAttribute('for', 'inputEtablissement');
+        label.textContent = 'Établissement :';
+        const input = document.createElement('input');
+        input.id = 'inputEtablissement';
+        input.type = 'text';
+        input.placeholder = "Nom de l'établissement";
+        wrapper.appendChild(label);
+        wrapper.appendChild(input);
+        return wrapper;
+    };
+
+    const setup = () => {
+        try {
+            // Avoid duplicate insertion
+            if (document.getElementById('inputEtablissement')) {
+                bindBehaviorToInput(document.getElementById('inputEtablissement'));
+                return;
+            }
+
+            const selectSession = document.getElementById('selectSession');
+            const selectDepartement = document.getElementById('selectDepartement');
+
+            if (!selectSession || !selectDepartement) {
+                // DOM may not be ready yet -> retry shortly
+                setTimeout(setup, 120);
+                return;
+            }
+
+            const insertAfterNode = selectSession.closest('div') || selectSession;
+            const fieldNode = createFieldNode();
+            if (insertAfterNode && insertAfterNode.parentNode) {
+                insertAfterNode.parentNode.insertBefore(fieldNode, insertAfterNode.nextSibling);
+            } else {
+                const header = document.getElementById('page-header') || document.body;
+                if (header) header.insertBefore(fieldNode, selectDepartement.closest('div') || selectDepartement);
+            }
+
+            bindBehaviorToInput(document.getElementById('inputEtablissement'));
+        } catch (e) {
+            console.warn('injectAndInitEtablissementField setup error', e);
+        }
+    };
+
+    function bindBehaviorToInput(inputElt) {
+        if (!inputElt) return;
+
+        if (typeof window.StateManager === 'undefined') {
+            setTimeout(() => bindBehaviorToInput(inputElt), 120);
+            return;
+        }
+
+        try {
+            if (!StateManager.state) StateManager.state = {};
+            if (!StateManager.state.header) StateManager.state.header = {};
+
+            try { inputElt.value = StateManager.state.header.etablissement || ''; } catch (e) { inputElt.value = ''; }
+
+            const saveEtab = debounceLocal((val) => {
+                try {
+                    StateManager.state = StateManager.state || {};
+                    StateManager.state.header = StateManager.state.header || {};
+                    StateManager.state.header.etablissement = val || '';
+                    if (typeof StateManager.saveState === 'function') StateManager.saveState();
+                } catch (err) {
+                    console.warn('Failed to persist etablissement to StateManager', err);
+                }
+            }, 600);
+
+            inputElt.addEventListener('input', (e) => {
+                const v = e.target.value;
+                try { StateManager.state.header.etablissement = v; } catch (err) { /* noop */ }
+                saveEtab(v);
+            });
+
+            window.__refreshEtablissementInput = function () {
+                try { inputElt.value = StateManager.state.header.etablissement || ''; } catch (e) { /* noop */ }
+            };
+        } catch (e) {
+            console.warn('bindBehaviorToInput error', e);
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setup);
+    } else {
+        setTimeout(setup, 0);
+    }
+});
 /**
  * Classe principale de l'application
  */
@@ -165,15 +305,20 @@ class EDTApplication {
       */
     async init() {
         console.log(`🚀 Initialisation de l'application EDT v${this.version}...`);
+
         // --- Auth check (redirect to login if not authenticated) ---
         try {
             const dbAuth = new DatabaseService();
             // Try to open / health-check (no-op if backend unreachable)
-            try { await dbAuth.open(); } catch (e) { /* ignore open error */ }
+            try {
+                await dbAuth.open();
+            } catch (e) {
+                console.debug('Database open check failed (expected if backend unreachable):', e.message);
+            }
+
             // If not authenticated, redirect to login page with redirect param
             if (!dbAuth.isAuthenticated()) {
                 const redirect = encodeURIComponent(window.location.pathname + window.location.search);
-                // Use login.html (create it if not present) — adjust path if your login route differs
                 window.location.replace(`/login.html?redirect=${redirect}`);
                 return; // stop app init
             }
@@ -185,15 +330,23 @@ class EDTApplication {
         try {
             // 1. UI Managers & Spinner
             this.initializeUIManagers();
-            // SpinnerManager.show('Chargement de la base de données...');
             SpinnerManager.show();
 
             // 2. Chargement des données (ASYNC - IndexedDB)
+            if (!StateManager) {
+                throw new Error('StateManager not available');
+            }
             await StateManager.init();
-
+            // AutoSyncService: tenter restauration depuis le serveur et initialiser la synchronisation périodique.
+            // Ne fait rien si window.EDT_API_BASE n'est pas défini ou si l'API n'est pas disponible.
+            try {
+                AutoSyncService.init({ intervalMs: 1000 * 60 * 5 }); // sync toutes les 5 minutes
+            } catch (e) {
+                console.debug('AutoSyncService.init failed (non-fatal):', e && e.message);
+            }
             // 3. Gestion des Créneaux
-            const stateCreneaux = (StateManager && StateManager.state && StateManager.state.creneaux) ? StateManager.state.creneaux : null;
-            if (!stateCreneaux || Object.keys(stateCreneaux).length === 0) {
+            const stateCreneaux = StateManager?.state?.creneaux;
+            if (!stateCreneaux || (typeof stateCreneaux === 'object' && Object.keys(stateCreneaux).length === 0)) {
                 console.warn('⚠️ Créneaux manquants - initialisation par défaut');
                 initCreneaux(); // initialise avec la configuration par défaut
                 try {
@@ -206,7 +359,11 @@ class EDTApplication {
             } else {
                 initCreneaux(stateCreneaux);
             }
+
             // 4. Sécurisation des données
+            if (!StateManager.state) {
+                StateManager.state = {};
+            }
             if (!Array.isArray(StateManager.state.examens)) StateManager.state.examens = [];
             if (!Array.isArray(StateManager.state.examRoomConfigs)) StateManager.state.examRoomConfigs = [];
             if (!StateManager.state.header) StateManager.state.header = {};
@@ -252,10 +409,71 @@ class EDTApplication {
             LogService.success(`✅ Application initialisée`);
 
             // Check conflits différé
+            const runConflictChecksDeferred = (allSeances, sallesInfo) => {
+                if (!Array.isArray(allSeances) || allSeances.length === 0) {
+                    if (TableRenderer && typeof TableRenderer.updateConflictCounts === 'function') {
+                        try { TableRenderer.updateConflictCounts(); } catch (e) { /* noop */ }
+                    }
+                    return;
+                }
+
+                const batchSize = 50; // ajuster (50 est un bon point de départ)
+                let idx = 0;
+
+                const processChunk = (deadline) => {
+                    // If called via rIC we get a deadline; otherwise performance.now fallback.
+                    const start = performance.now();
+                    // Process until time remaining is low or we reach batchSize
+                    let processed = 0;
+                    while (idx < allSeances.length && processed < batchSize) {
+                        const s = allSeances[idx++];
+                        if (s) {
+                            try {
+                                // exclude own id to avoid self/self comparisons
+                                ConflictService.checkAllConflicts(s, allSeances, [s.id], sallesInfo);
+                            } catch (e) {
+                                // ignore per-session failures
+                            }
+                        }
+                        processed++;
+                        // optional early exit to avoid long blocking in non-rIC calls
+                        if (!deadline && (performance.now() - start) > 12) break;
+                        if (deadline && typeof deadline.timeRemaining === 'function' && deadline.timeRemaining() <= 1) break;
+                    }
+
+                    if (idx < allSeances.length) {
+                        // schedule next chunk
+                        if (typeof window.requestIdleCallback === 'function') {
+                            window.requestIdleCallback(processChunk, { timeout: 500 });
+                        } else {
+                            setTimeout(() => processChunk(), 0);
+                        }
+                    } else {
+                        // finished
+                        try { if (TableRenderer && typeof TableRenderer.updateConflictCounts === 'function') TableRenderer.updateConflictCounts(); } catch (e) { /* noop */ }
+                    }
+                };
+
+                // start after a short delay so initial UI rendering completes
+                if (typeof window.requestIdleCallback === 'function') {
+                    window.requestIdleCallback(processChunk, { timeout: 500 });
+                } else {
+                    setTimeout(() => processChunk(), 50);
+                }
+            };
+
+            // usage (remplace l'ancien setTimeout dans init)
             setTimeout(() => {
-                if (window.EDTConflictService) {
-                    ConflictService.checkAllConflicts();
-                    TableRenderer.updateConflictCounts();
+                try {
+                    if (ConflictService && typeof ConflictService.checkAllConflicts === 'function') {
+                        const allSeances = (StateManager && typeof StateManager.getSeances === 'function')
+                            ? StateManager.getSeances()
+                            : (StateManager && StateManager.state && StateManager.state.seances) || [];
+                        const sallesInfo = (StateManager && StateManager.state && StateManager.state.sallesInfo) || {};
+                        runConflictChecksDeferred(allSeances, sallesInfo);
+                    }
+                } catch (e) {
+                    console.warn('Conflict check failed:', e);
                 }
             }, 1000);
 
@@ -263,8 +481,13 @@ class EDTApplication {
 
         } catch (error) {
             console.error('❌ Erreur init:', error);
-            NotificationManager.error('Erreur chargement: ' + error.message);
+            NotificationManager.error('Erreur chargement: ' + (error?.message || 'Unknown error'));
             SpinnerManager.hide();
+
+            // Try to show a helpful error dialog
+            if (DialogManager && typeof DialogManager.error === 'function') {
+                DialogManager.error('Erreur lors de l\'initialisation de l\'application. Veuillez rafraîchir la page.');
+            }
         }
     }
     // Ajoute ceci dans la classe EDTApplication
@@ -405,6 +628,13 @@ class EDTApplication {
         }
         SpinnerManager.init('loading-overlay');
         NotificationManager.init('edt-notification-area');
+
+        // Initialize save status indicator
+        try {
+            SaveStatusIndicator.init('header-actions');
+        } catch (e) {
+            console.warn('SaveStatusIndicator.init failed:', e);
+        }
     }
 
     /**
@@ -413,6 +643,15 @@ class EDTApplication {
     initializeUI() {
         // Charger les en-têtes
         this.loadHeaderValues();
+
+        // Ensure the Établissement field is injected and initialized after UI/state are ready.
+        try {
+            if (typeof window.injectAndInitEtablissementField === 'function') {
+                window.injectAndInitEtablissementField();
+            }
+        } catch (e) {
+            console.warn('injectAndInitEtablissementField invocation failed', e);
+        }
 
         // Initialiser les formulaires
         this.initializeForms();
@@ -770,13 +1009,62 @@ class EDTApplication {
     loadHeaderValues() {
         const header = getState().header || {};
 
+        // Populate header departments from filieres first (ensures selectDepartement options are built from latest filieres)
+        try {
+            if (typeof this.populateHeaderDepartmentsFromFilieres === 'function') {
+                try { this.populateHeaderDepartmentsFromFilieres(); } catch (e) { /* noop */ }
+            }
+        } catch (e) { /* noop */ }
+
         const inputAnnee = document.getElementById('inputAnneeUniversitaire');
         const selectSession = document.getElementById('selectSession');
         const selectDept = document.getElementById('selectDepartement');
 
         if (inputAnnee) inputAnnee.value = header.annee || '';
         if (selectSession) selectSession.value = header.session || '';
-        if (selectDept) selectDept.value = header.departement || '';
+        // Département : prefer StateManager, fallback to localStorage so selection survives logout/reload
+        try {
+            const lsDept = (typeof window.localStorage !== 'undefined') ? window.localStorage.getItem('edt_departement') : null;
+            const deptVal = (header && header.departement) ? header.departement : (lsDept || '');
+            if (selectDept) {
+                try { selectDept.value = deptVal; } catch (e) { /* fallback below */ }
+                // If value not present among options, append it so selection is preserved
+                if (selectDept && deptVal) {
+                    const found = Array.from(selectDept.options).some(o => String(o.value) === String(deptVal));
+                    if (!found) {
+                        try { selectDept.appendChild(createOption({ value: deptVal, text: deptVal })); selectDept.value = deptVal; } catch (e) { /* noop */ }
+                    }
+                }
+            }
+            // ensure state has the value for downstream usage
+            try {
+                if (deptVal && (!StateManager.state || !StateManager.state.header || !StateManager.state.header.departement)) {
+                    if (!StateManager.state) StateManager.state = {};
+                    if (!StateManager.state.header) StateManager.state.header = {};
+                    StateManager.state.header.departement = deptVal;
+                    if (typeof StateManager.saveState === 'function') StateManager.saveState();
+                }
+            } catch (e) { /* noop */ }
+        } catch (e) {
+            if (selectDept) selectDept.value = header.departement || '';
+        }
+        // Établissement : lire d'abord depuis l'état, fallback localStorage, et injecter dans StateManager si absent
+        try {
+            const inputEtab = document.getElementById('inputEtablissement');
+            const lsEtab = (typeof window.localStorage !== 'undefined') ? window.localStorage.getItem('edt_etablissement') : null;
+            const etabVal = header.etablissement || lsEtab || '';
+            if (inputEtab) inputEtab.value = etabVal;
+            // Ensure StateManager.state.header.etablissement is populated for consistent downstream usage
+            try {
+                if (etabVal && (!StateManager.state || !StateManager.state.header || !StateManager.state.header.etablissement)) {
+                    if (!StateManager.state) StateManager.state = {};
+                    if (!StateManager.state.header) StateManager.state.header = {};
+                    StateManager.state.header.etablissement = etabVal;
+                    // Persist to state storage as well (best-effort)
+                    if (typeof StateManager.saveState === 'function') StateManager.saveState();
+                }
+            } catch (e) { /* noop */ }
+        } catch (e) { /* noop */ }
     }
 
     /**
@@ -878,11 +1166,96 @@ class EDTApplication {
             });
         }
     }
+    /**
+        * Remplit le select d'en-tête #selectDepartement à partir des départements présents
+        * dans les filières importées (StateManager.state.filieres). Ajoute toujours "Administration".
+        * Tolérant : accepte plusieurs noms de propriété pour le département dans les objets filière.
+        */
+    populateHeaderDepartmentsFromFilieres() {
+        try {
+            const selectDept = document.getElementById('selectDepartement');
+            if (!selectDept) return;
 
+            const filieres = (StateManager && StateManager.state && Array.isArray(StateManager.state.filieres))
+                ? StateManager.state.filieres
+                : [];
+
+            const depsSet = new Set();
+
+            // Extract departments from each filiere (tolerant keys)
+            filieres.forEach(f => {
+                try {
+                    if (!f) return;
+                    const raw = f.departement || f.dept || f.department || f.deptName || f.nomDepartement || f.faculte || '';
+                    const s = String(raw || '').trim();
+                    if (s) depsSet.add(s);
+                } catch (e) { /* ignore individual parse errors */ }
+            });
+
+            // Always ensure Administration is present
+            depsSet.add('Administration');
+
+            const deps = Array.from(depsSet);
+
+            // Sort alphabetically but keep 'Administration' at the end for convenience
+            deps.sort((a, b) => {
+                if (a === 'Administration') return 1;
+                if (b === 'Administration') return -1;
+                try { return a.localeCompare(b, 'fr', { sensitivity: 'base' }); } catch (e) { return a > b ? 1 : -1; }
+            });
+
+            // Replace options in header select (keep a blank/default option first)
+            while (selectDept.firstChild) selectDept.removeChild(selectDept.firstChild);
+            selectDept.appendChild(createOption({ value: '', text: '-- Sélectionner --' }));
+            deps.forEach(d => selectDept.appendChild(createOption({ value: d, text: d })));
+
+            // Determine preferred value (StateManager has priority, fallback to localStorage)
+            let preferred = null;
+            try {
+                preferred = (StateManager && StateManager.state && StateManager.state.header && StateManager.state.header.departement) || null;
+            } catch (e) { preferred = null; }
+            try {
+                if (!preferred && typeof window.localStorage !== 'undefined') {
+                    const ls = window.localStorage.getItem('edt_departement');
+                    if (ls) preferred = ls;
+                }
+            } catch (e) { /* noop */ }
+
+            // If preferred exists and not present in options, append it (so it can be selected)
+            if (preferred && preferred.toString().trim()) {
+                const prefStr = String(preferred);
+                const found = Array.from(selectDept.options).some(o => String(o.value) === prefStr);
+                if (!found) {
+                    try {
+                        const opt = createOption({ value: prefStr, text: prefStr });
+                        // append at the end (before Administration if you want different ordering)
+                        selectDept.appendChild(opt);
+                    } catch (e) { /* noop */ }
+                }
+                // Select the preferred value explicitly
+                try {
+                    selectDept.value = prefStr;
+                    // mark selected attribute for robustness
+                    Array.from(selectDept.options).forEach(o => o.selected = (String(o.value) === prefStr));
+                } catch (e) { /* noop */ }
+            } else {
+                // If no preferred, ensure default empty is selected
+                try { selectDept.value = ''; } catch (e) { /* noop */ }
+            }
+        } catch (e) {
+            console.warn('populateHeaderDepartmentsFromFilieres failed', e);
+        }
+    }
     /**
      * Peuple les listes déroulantes des formulaires
      */
     populateFormSelects() {
+        // Ensure header department select is populated from filieres before building dependent selects
+        try {
+            if (typeof this.populateHeaderDepartmentsFromFilieres === 'function') {
+                try { this.populateHeaderDepartmentsFromFilieres(); } catch (e) { /* noop */ }
+            }
+        } catch (e) { /* noop */ }
         // Filières (pour formulaire de séance et de matière)
         const selectFiliere = document.getElementById('selectFiliere');
         const selectFiliereMatiere = document.getElementById('selectFiliereMatiere');
@@ -1698,9 +2071,22 @@ class EDTApplication {
         if (selectDept) {
             selectDept.addEventListener('change', (e) => {
                 const state = getState();
-                if (!state.header) state.header = {};
-                state.header.departement = e.target.value;
-                StateManager.saveState();
+                try {
+                    if (!state.header) state.header = {};
+                    state.header.departement = e.target.value;
+                    // Persist in StateManager (IndexedDB) as before
+                    try { StateManager.saveState(); } catch (err) { /* noop */ }
+                } catch (err) { /* noop */ }
+
+                // Also persist to localStorage so the selection survives logout/session resets
+                try {
+                    const v = e.target.value || '';
+                    if (typeof window.localStorage !== 'undefined') {
+                        if (v && v.length) window.localStorage.setItem('edt_departement', String(v));
+                        else window.localStorage.removeItem('edt_departement');
+                    }
+                } catch (lsErr) { console.warn('localStorage write failed for edt_departement', lsErr); }
+
                 LogService.info(`Département mis à jour: ${e.target.value}`);
             });
         }
@@ -2791,7 +3177,8 @@ window.StateManager = StateManager;
 
 // Exposer TableRenderer pour la console et le debugging
 window.TableRenderer = TableRenderer;
-window. EDTTableRenderer = TableRenderer;
+window.EDTTableRenderer = TableRenderer;
+window.EDTSaveStatus = SaveStatusIndicator;
 
 // Aussi exposer l'instance du service si disponible
 if (StateManager && StateManager.dbService) {

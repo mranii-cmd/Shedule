@@ -1,5 +1,6 @@
 /**
  * Renderer pour l'affichage des statistiques
+ * Améliorations UI : recherche sur matières + per-page + pagination améliorée
  * @author Ibrahim Mrani - UCD
  */
 
@@ -8,11 +9,40 @@ import SubjectController from '../controllers/SubjectController.js';
 import TeacherController from '../controllers/TeacherController.js';
 import RoomController from '../controllers/RoomController.js';
 import { safeText } from '../utils/sanitizers.js';
+import { filterSubjectsByDepartment, filterSubjectNamesByDepartment } from '../utils/helpers.js';
+import AnalyticsService from '../services/AnalyticsService.js';
 // import { escapeHTML } from '../utils/sanitizers.js';
 
 class StatsRenderer {
     constructor() {
         this.container = null;
+
+        // État de pagination pour différentes listes
+        this.pageState = {
+            inconsistencies: 1,
+            subjects: 1
+        };
+
+        // Taille par défaut (modifiable)
+        this.pageSize = {
+            inconsistencies: 5,
+            subjects: 10
+        };
+
+        // Filtres / recherches
+        this.filters = {
+            subjectQuery: ''
+        };
+
+        // Handlers
+        this._onPaginationClick = this._onPaginationClick.bind(this);
+        this._onControlInput = this._onControlInput.bind(this);
+
+        // éviter d'attacher plusieurs fois le même handler
+        this._listenerAttached = false;
+
+        // debounce pour la recherche
+        this._searchDebounce = null;
     }
 
     /**
@@ -22,7 +52,23 @@ class StatsRenderer {
     init(containerId = 'statsContainer') {
         this.container = document.getElementById(containerId);
         if (!this.container) {
-            console.warn(`Container #${containerId} not found`);
+            console.warn(`Container #${containerId} not found — fallback to document-level handlers`);
+            // fallback : attacher handlers au document si container pas encore présent
+            if (!this._listenerAttached) {
+                document.addEventListener('click', this._onPaginationClick);
+                document.addEventListener('input', this._onControlInput);
+                document.addEventListener('change', this._onControlInput);
+                this._listenerAttached = true;
+            }
+            return;
+        }
+
+        // attacher handlers au container (préférable) si pas déjà attaché
+        if (!this._listenerAttached) {
+            this.container.addEventListener('click', this._onPaginationClick);
+            this.container.addEventListener('input', this._onControlInput);
+            this.container.addEventListener('change', this._onControlInput);
+            this._listenerAttached = true;
         }
     }
 
@@ -35,8 +81,13 @@ class StatsRenderer {
         const html = `
             <div class="stats-section">
                 ${this.renderOverview()}
+
                 ${this.renderDistributionCharts()}
+
                 ${this.renderInconsistencies()}
+
+                ${this.renderSubjectStats()}
+
                 ${this.renderTopStats()}
             </div>
         `;
@@ -50,16 +101,23 @@ class StatsRenderer {
      */
     renderOverview() {
         const seances = StateManager.getSeances();
-        const enseignants = StateManager.state.enseignants;
-        const matieres = Object.keys(StateManager.state.matiereGroupes);
-        const salles = Object.keys(StateManager.state.sallesInfo);
+        const enseignants = StateManager.state.enseignants || [];
+        const departement = StateManager.state?.header?.departement || '';
 
-        const seancesWithTeacher = seances.filter(s => s.hasTeacher()).length;
-        const seancesWithRoom = seances.filter(s => s.hasRoom()).length;
+        // Filtrer les matières par département en utilisant la fonction helper
+        const allMatieres = Object.keys(StateManager.state.matiereGroupes || {});
+        const matieres = filterSubjectNamesByDepartment(allMatieres, departement, StateManager.state.matiereGroupes);
+
+        const salles = Object.keys(StateManager.state.sallesInfo || {});
+
+        const seancesWithTeacher = seances.filter(s => (s.hasTeacher && typeof s.hasTeacher === 'function') ? s.hasTeacher() : Boolean(s.enseignant || s.enseignants || s.enseignantsArray)).length;
+        const seancesWithRoom = seances.filter(s => (s.hasRoom && typeof s.hasRoom === 'function') ? s.hasRoom() : Boolean(s.salle)).length;
+
+        const deptNote = departement && departement !== 'Administration' ? ` (${safeText(departement)})` : '';
 
         return `
             <div class="overview-section">
-                <h3>📈 Vue d'Ensemble</h3>
+                <h3>📈 Vue d'Ensemble${deptNote}</h3>
                 <div class="overview-grid">
                     <div class="overview-card">
                         <div class="card-icon">📅</div>
@@ -80,7 +138,7 @@ class StatsRenderer {
                         <div class="card-icon">📚</div>
                         <div class="card-content">
                             <div class="card-value">${matieres.length}</div>
-                            <div class="card-label">Matières</div>
+                            <div class="card-label">Matières${deptNote}</div>
                         </div>
                     </div>
                     <div class="overview-card">
@@ -115,13 +173,13 @@ class StatsRenderer {
             byDay[jour] = seances.filter(s => s.jour === jour).length;
         });
 
-        const maxByType = Math.max(...Object.values(byType));
-        const maxByDay = Math.max(...Object.values(byDay));
+        const maxByType = Math.max(...Object.values(byType), 1);
+        const maxByDay = Math.max(...Object.values(byDay), 1);
 
         return `
             <div class="distribution-section">
                 <h3>📊 Répartition des Séances</h3>
-                
+
                 <div class="charts-grid">
                     <div class="chart-container">
                         <h4>Par Type</h4>
@@ -227,11 +285,19 @@ class StatsRenderer {
             `;
         }
 
+        // Pagination
+        const page = Math.max(1, Number(this.pageState.inconsistencies) || 1);
+        const perPage = this.pageSize.inconsistencies || 5;
+        const total = allInconsistencies.length;
+        const totalPages = Math.max(1, Math.ceil(total / perPage));
+        const start = (page - 1) * perPage;
+        const pageItems = allInconsistencies.slice(start, start + perPage);
+
         return `
             <div class="inconsistencies-section">
-                <h3>⚠️ Incohérences Détectées (${allInconsistencies.length}) — Session ${safeText(sessionType)}</h3>
-                <div class="inconsistencies-list">
-                    ${allInconsistencies.map(item => `
+                <h3>⚠️ Incohérences Détectées (${total}) — Session ${safeText(sessionType)}</h3>
+                <div id="inconsistenciesList" class="inconsistencies-list">
+                    ${pageItems.map(item => `
                         <div class="inconsistency-item">
                             <div class="inconsistency-subject">${safeText(item.subject)} <small class="filiere-tag">(${safeText(item.filiere)})</small></div>
                             <ul class="inconsistency-issues">
@@ -239,6 +305,92 @@ class StatsRenderer {
                             </ul>
                         </div>
                     `).join('')}
+                </div>
+
+                <div id="inconsistenciesPager" class="stats-pager" data-list="inconsistencies" data-total="${total}" data-per-page="${perPage}" data-page="${page}">
+                    ${this._renderPaginationHtml('inconsistencies', page, totalPages)}
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Rend la table/section des statistiques par matière (paginated)
+     * @returns {string} HTML
+     */
+    renderSubjectStats() {
+        const subjectStats = AnalyticsService.calculateSubjectStats() || [];
+        const departement = StateManager.state?.header?.departement || '';
+
+        // Si département : filtrer
+        let filtered = subjectStats;
+        if (departement && departement !== 'Administration') {
+            filtered = subjectStats.filter(s => {
+                const subjectDept = s.departement || s.config?.departement || '';
+                return subjectDept === departement;
+            });
+        }
+
+        // appliquer filtre de recherche (this.filters.subjectQuery)
+        const q = String(this.filters.subjectQuery || '').trim().toLowerCase();
+        if (q) {
+            filtered = filtered.filter(s => String(s.nom || '').toLowerCase().includes(q));
+        }
+
+        const total = filtered.length;
+        const page = Math.max(1, Number(this.pageState.subjects) || 1);
+        const perPage = this.pageSize.subjects || 10;
+        const totalPages = Math.max(1, Math.ceil(total / perPage));
+        const start = (page - 1) * perPage;
+        const pageItems = filtered.slice(start, start + perPage);
+
+        // header controls : search + per-page
+        const perPageOptions = [5, 10, 20, 50];
+        const perPageSelectHtml = perPageOptions.map(n => `<option value="${n}" ${n === perPage ? 'selected' : ''}>${n}</option>`).join('');
+
+        return `
+            <div class="subject-stats-section">
+                <div class="subject-stats-header">
+                    <h3>📚 Statistiques par Matière (${total})</h3>
+                    <div class="subject-controls">
+                        <input type="search" class="stats-search" placeholder="Rechercher une matière…" value="${safeText(this.filters.subjectQuery || '')}" aria-label="Rechercher une matière">
+                        <label class="per-page-label">Afficher
+                            <select class="per-page-select" data-list="subjects" aria-label="Sélectionner le nombre d'éléments par page">
+                                ${perPageSelectHtml}
+                            </select>
+                        </label>
+                    </div>
+                </div>
+
+                <table class="subject-stats-table">
+                    <thead>
+                        <tr>
+                            <th>Matière</th>
+                            <th>Filière</th>
+                            <th>Séances</th>
+                            <th>Cours</th>
+                            <th>TD</th>
+                            <th>TP</th>
+                            <th>Complétion (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${pageItems.map(s => `
+                            <tr>
+                                <td>${safeText(s.nom)}</td>
+                                <td>${safeText(s.filiere || '')}</td>
+                                <td>${s.totalSeances}</td>
+                                <td>${s.cours}</td>
+                                <td>${s.td}</td>
+                                <td>${s.tp}</td>
+                                <td>${s.completion}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+
+                <div id="subjectsPager" class="stats-pager" data-list="subjects" data-total="${total}" data-per-page="${perPage}" data-page="${page}">
+                    ${this._renderPaginationHtml('subjects', page, totalPages)}
                 </div>
             </div>
         `;
@@ -249,11 +401,21 @@ class StatsRenderer {
      * @returns {string} HTML
      */
     renderTopStats() {
+        const departement = StateManager.state?.header?.departement || '';
+
         const teachers = TeacherController.getAllTeachersWithStats()
             .sort((a, b) => b.stats.totalSeances - a.stats.totalSeances)
             .slice(0, 5);
 
-        const subjects = SubjectController.getAllSubjectsWithStats()
+        // Filtrer les matières par département
+        let subjects = SubjectController.getAllSubjectsWithStats();
+        if (departement && departement !== 'Administration') {
+            subjects = subjects.filter(s => {
+                const subjectDept = s.departement || s.config?.departement || '';
+                return subjectDept === departement;
+            });
+        }
+        subjects = subjects
             .sort((a, b) => b.stats.totalSeances - a.stats.totalSeances)
             .slice(0, 5);
 
@@ -263,7 +425,7 @@ class StatsRenderer {
 
         return `
             <div class="top-stats-section">
-                <h3>🏆 Top 5</h3>
+                <h3>🏆 Top 5${departement && departement !== 'Administration' ? ` (${safeText(departement)})` : ''}</h3>
                 <div class="top-stats-grid">
                     <div class="top-list">
                         <h4>Enseignants (séances)</h4>
@@ -294,6 +456,95 @@ class StatsRenderer {
                 </div>
             </div>
         `;
+    }
+
+    /**
+     * Génère l'HTML des contrôles de pagination pour une liste donnée
+     */
+    _renderPaginationHtml(listName, currentPage, totalPages) {
+        // limiter affichage de pages trop nombreuses (fenêtre)
+        const maxButtons = 7;
+        let start = 1;
+        let end = totalPages;
+        if (totalPages > maxButtons) {
+            const half = Math.floor(maxButtons / 2);
+            start = Math.max(1, currentPage - half);
+            end = Math.min(totalPages, start + maxButtons - 1);
+            if (end - start + 1 < maxButtons) {
+                start = Math.max(1, end - maxButtons + 1);
+            }
+        }
+
+        let html = `<button class="pager-btn" data-list="${listName}" data-page="${Math.max(1, currentPage - 1)}" ${currentPage <= 1 ? 'disabled' : ''}>Prev</button>`;
+
+        for (let p = start; p <= end; p++) {
+            html += `<button class="pager-btn ${p === currentPage ? 'active' : ''}" data-list="${listName}" data-page="${p}">${p}</button>`;
+        }
+
+        html += `<button class="pager-btn" data-list="${listName}" data-page="${Math.min(totalPages, currentPage + 1)}" ${currentPage >= totalPages ? 'disabled' : ''}>Next</button>`;
+
+        return html;
+    }
+
+    /**
+     * Handler délégation clics pour pagination
+     */
+    _onPaginationClick(e) {
+        // robustifier la détection du bouton (e.target peut être un Text node)
+        const btn = (e.target && typeof e.target.closest === 'function') ? e.target.closest('.pager-btn') : (e.target && e.target.classList && e.target.classList.contains('pager-btn') ? e.target : null);
+        if (!btn) return;
+        // si on utilise le fallback document-level, accepter le bouton même s'il n'est pas enfant direct du container
+        if (this.container && !this.container.contains(btn)) return;
+
+        // ignorer si bouton disabled
+        if (btn.disabled || btn.getAttribute('aria-disabled') === 'true') return;
+
+        const list = btn.getAttribute('data-list');
+        const page = parseInt(btn.getAttribute('data-page'), 10) || 1;
+
+        if (!list) return;
+
+        // Mettre à jour l'état et re-render
+        this.pageState[list] = page;
+        this.render();
+        // scroller jusqu'à la section
+        const sectionId = list === 'inconsistencies' ? '#inconsistenciesList' : (list === 'subjects' ? '.subject-stats-section' : null);
+        if (sectionId) {
+            const el = this.container ? this.container.querySelector(sectionId) : document.querySelector(sectionId);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+
+    /**
+     * Handler pour inputs / selects (recherche, per-page)
+     */
+    _onControlInput(e) {
+        const target = e.target;
+        if (!target) return;
+
+        // recherche matières
+        if (target.matches && target.matches('.stats-search')) {
+            const value = target.value || '';
+            // debounce
+            clearTimeout(this._searchDebounce);
+            this._searchDebounce = setTimeout(() => {
+                this.filters.subjectQuery = value;
+                // reset page
+                this.pageState.subjects = 1;
+                this.render();
+            }, 220);
+            return;
+        }
+
+        // per-page selector
+        if (target.matches && target.matches('.per-page-select')) {
+            const list = target.getAttribute('data-list') || 'subjects';
+            const n = parseInt(target.value, 10) || this.pageSize[list] || 10;
+            this.pageSize[list] = n;
+            this.pageState[list] = 1;
+            this.render();
+            return;
+        }
     }
 }
 

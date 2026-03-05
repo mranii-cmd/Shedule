@@ -12,6 +12,7 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify@2.4.0/dist/purify.min.js"></script> -->
     <!-- Styles -->
     <link rel="stylesheet" href="src/css/main.css">
+    <link rel="stylesheet" href="src/css/stats-ui.css">
     <style>
         /* Style pour le bouton wizard */
         #btnOpenExamWizard {
@@ -68,32 +69,44 @@
 
     <!-- Conteneur principal -->
     <div class="app-container">
-        <!-- En-tête -->
+        <!-- En-tête (champs alignés sur une seule ligne, labels visibles supprimés) -->
         <div id="page-header">
-            <div>
-                <label for="inputAnneeUniversitaire">Année :</label>
-                <input type="text" id="inputAnneeUniversitaire" placeholder="2024/2025">
+            <div class="header-fields-inline" role="region" aria-label="Filtres d'affichage">
+                <div class="header-field">
+                    <!-- Année (sans label visible) -->
+                    <input type="text" id="inputAnneeUniversitaire" name="annee" placeholder="Année (ex: 2024/2025)"
+                        aria-label="Année">
+                </div>
+
+                <div class="header-field">
+                    <!-- Session (sans label visible) -->
+                    <select id="selectSession" name="session" aria-label="Session">
+                        <option value="Session d'automne">Session d'automne</option>
+                        <option value="Session de printemps">Session de printemps</option>
+                    </select>
+                </div>
+
+                <div class="header-field">
+                    <!-- Etablissement (nouveau champ / sans label visible) -->
+                    <input type="text" id="inputEtablissement" name="etablissement" placeholder="Etablissement"
+                        aria-label="Etablissement" value="FSJ - EL JADIDA">
+                </div>
+
+                <div class="header-field">
+                    <!-- Département (sans label visible) -->
+                    <select id="selectDepartement" name="departement" aria-label="Département">
+                        <option>Département de Physique</option>
+                        <option>Département de Chimie</option>
+                        <option>Département de Biologie</option>
+                        <option>Département de Mathématiques</option>
+                        <option>Département d'Informatique</option>
+                        <option>Département de Géologie</option>
+                        <option>Département Modules Transverseaux</option>
+                        <option>Administration</option>
+                    </select>
+                </div>
             </div>
-            <div>
-                <label for="selectSession">Session :</label>
-                <select id="selectSession">
-                    <option value="Session d'automne">Session d'automne</option>
-                    <option value="Session de printemps">Session de printemps</option>
-                </select>
-            </div>
-            <div>
-                <label for="selectDepartement">Département :</label>
-                <select id="selectDepartement">
-                    <option>Département de physique</option>
-                    <option>Département de chimie</option>
-                    <option>Département de Biologie</option>
-                    <option>Département de mathématiques</option>
-                    <option>Département d'informatique</option>
-                    <option>Département de Géologie</option>
-                    <option>Département Modules Transversaux</option>
-                    <option>Administration</option>
-                </select>
-            </div>
+
             <div id="header-actions">
                 <button id="saveBtn" class="save-btn">💾 Enregistrer</button>
                 <button id="btnManageCreneaux" class="btn" title="Gérer les créneaux">⏱️ Gérer Créneaux</button>

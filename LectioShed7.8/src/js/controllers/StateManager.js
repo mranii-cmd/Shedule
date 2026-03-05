@@ -11,6 +11,7 @@ import Subject from '../models/Subject.js';
 import DatabaseService from '../services/DatabaseService.js';
 import LogService from '../services/LogService.js';
 import { snapshotCurrentSession } from '../utils/stateHelpers.js';
+import SaveStatusIndicator from '../ui/SaveStatusIndicator.js';
 
 class StateManager {
     constructor() {
@@ -91,11 +92,44 @@ class StateManager {
             this._undoLimit = 50;
         }
 
-        // best-effort save on unload to reduce data-loss on fast reloads
+     // best-effort save on unload to reduce data-loss on fast reloads
         try {
             if (typeof window !== 'undefined' && window.addEventListener) {
-                window.addEventListener('beforeunload', () => {
-                    try { this.saveState(true); } catch (e) { /* noop */ }
+               window.addEventListener('beforeunload', () => {
+                    try {
+                        // Mark runtime as unloading so httpRequest/save can suppress network-abort noise.
+                        try { if (typeof window !== 'undefined') window.__edt_unloading = true; } catch (e) { /* noop */ }
+                        // Fire-and-forget keepalive save to avoid the browser aborting the request on reload.
+                        // Prefer DatabaseService._postGlobal (which should forward keepalive to fetch),
+                        // fallback to navigator.sendBeacon if available (note: sendBeacon cannot set headers).
+                        try {
+                            if (this.dbService && typeof this.dbService._postGlobal === 'function') {
+                                const globalData = { ...this.state };
+                                delete globalData.seances;
+                                delete globalData.nextSessionId;
+                                delete globalData.header;
+                                delete globalData.examens;
+                                delete globalData.examRoomConfigs;
+                                // Non-blocking keepalive POST (DatabaseService.httpRequest must support keepalive)
+                                this.dbService._postGlobal(globalData, { keepalive: true }).catch(() => { /* noop */ });
+                            } else if (navigator.sendBeacon) {
+                                try {
+                                    const apiBase = window.__API_BASE_URL__ || (location.hostname === 'localhost' || location.hostname === '127.0.0.1' ? 'http://localhost:4000' : (location.origin + '/api'));
+                                    const url = apiBase.replace(/\/$/, '') + '/api/global';
+                                    const payload = JSON.stringify({ data: (function () {
+                                        const g = { ...this.state };
+                                        delete g.seances;
+                                        delete g.nextSessionId;
+                                        delete g.header;
+                                        delete g.examens;
+                                        delete g.examRoomConfigs;
+                                        return g;
+                                    }).call(this) });
+                                    navigator.sendBeacon(url, payload);
+                                } catch (e) { /* noop */ }
+                            }
+                        } catch (e) { /* noop */ }
+                    } catch (e) { /* noop */ }
                 });
             }
         } catch (e) {
@@ -526,12 +560,22 @@ class StateManager {
         if (typeof window !== 'undefined') {
             try {
                 if (!window.__edt_authenticated) {
-                    console.debug('StateManager. saveState: skipping remote save — not authenticated');
+                    console.debug('StateManager.saveState: skipping remote save — not authenticated');
                     return;
                 }
             } catch (e) { /* noop */ }
         }
         // END PATCH
+        
+        // Show saving indicator
+        try {
+            if (!silent && SaveStatusIndicator) {
+                SaveStatusIndicator.showSaving();
+            }
+        } catch (e) {
+            console.debug('SaveStatusIndicator.showSaving failed:', e);
+        }
+        
         try {
             // --- 1. Données Globales ---
             const globalData = { ...this.state };
@@ -612,10 +656,28 @@ class StateManager {
                     window.dispatchEvent(new CustomEvent('app:stateUpdated', { detail: { timestamp: Date.now() } }));
                 }
             } catch (e) { /* noop */ }
+            
+            // Show saved indicator
+            try {
+                if (!silent && SaveStatusIndicator) {
+                    SaveStatusIndicator.showSaved();
+                }
+            } catch (e) {
+                console.debug('SaveStatusIndicator.showSaved failed:', e);
+            }
 
         } catch (err) {
             // Erreur critique de persistance
             console.error('Erreur saveState:', err);
+            
+            // Show error indicator
+            try {
+                if (!silent && SaveStatusIndicator) {
+                    SaveStatusIndicator.showError();
+                }
+            } catch (e) {
+                console.debug('SaveStatusIndicator.showError failed:', e);
+            }
         }
     }
 

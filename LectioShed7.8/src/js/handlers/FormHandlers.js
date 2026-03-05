@@ -34,6 +34,8 @@ class FormHandlers {
         this.handleAddTeacher = this.handleAddTeacher.bind(this);
         this.handleAddSubject = this.handleAddSubject.bind(this);
         this.handleAddFiliere = this.handleAddFiliere.bind(this);
+        this.handleRemoveSubject = this.handleRemoveSubject.bind(this);
+        this._subjectDeleteProxy = null;
     }
 
     /**
@@ -112,7 +114,62 @@ class FormHandlers {
                 if (name) this.handleAddSubject({ nom: name });
             });
         }
+        // --- NEW: délégation pour suppression de matière via bouton avec data-subject-name ---
+        if (!this._subjectDeleteProxy) {
+            this._subjectDeleteProxy = (e) => {
+                try {
+                    // Recherche robuste de l'élément le plus proche correspondant au sélecteur,
+                    // tenant compte des Text nodes et du Shadow DOM (composedPath).
+                    const findClosestFromEventTarget = (evt, selector) => {
+                        if (!evt) return null;
+                        try {
+                            if (typeof evt.composedPath === 'function') {
+                                const path = evt.composedPath();
+                                for (const node of path) {
+                                    if (node && node.nodeType === Node.ELEMENT_NODE) {
+                                        try {
+                                            if (node.matches && node.matches(selector)) return node;
+                                        } catch (err) { /* ignore malformed selector errors */ }
+                                    }
+                                }
+                            }
+                        } catch (err) { /* ignore composedPath errors */ }
 
+                        let target = evt.target || evt.srcElement || null;
+                        if (!target) return null;
+                        // if clicked on a Text node, climb to parent element
+                        if (target.nodeType === Node.TEXT_NODE) target = target.parentElement;
+
+                        if (target && typeof target.closest === 'function') {
+                            try { return target.closest(selector); } catch (err) { /* ignore */ }
+                        }
+
+                        // fallback manual climb
+                        let node = target;
+                        while (node && node.nodeType === Node.ELEMENT_NODE) {
+                            try { if (node.matches && node.matches(selector)) return node; } catch (err) { /* ignore */ }
+                            node = node.parentElement;
+                        }
+                        return null;
+                    };
+
+                    const btn = findClosestFromEventTarget(e, '.btnDeleteSubject, [data-action="delete-subject"]');
+                    if (!btn) return;
+                    e.preventDefault();
+                    const name = btn.getAttribute('data-subject-name') || btn.dataset?.subjectName || btn.dataset?.name;
+                    if (!name) {
+                        DialogManager.error('Nom de matière introuvable pour la suppression.');
+                        return;
+                    }
+                    const confirmMsg = `Supprimer la matière "${name}" ? Cette action est irréversible.`;
+                    if (!window.confirm(confirmMsg)) return;
+                    this.handleRemoveSubject(name);
+                } catch (err) {
+                    console.error('subject delete proxy error', err);
+                }
+            };
+            document.addEventListener('click', this._subjectDeleteProxy, true);
+        }
         // 4. Formulaire Ajout Filière
         const formFiliere = document.getElementById('formFiliere');
         if (formFiliere) {
@@ -183,13 +240,24 @@ class FormHandlers {
             }
             // --- END PATCH ---
 
-            // Supporter update/create qui peuvent retourner un objet ou une Promise
+           // Supporter update/create qui peuvent retourner un objet ou une Promise
+            // Calculer options: autoriser l'absence de salle si aucune salle sélectionnée
+            const opts = {};
+            try {
+                const salleVal = formData && (formData.salle || formData.room || formData.local || '');
+                if (!salleVal || String(salleVal).trim() === '' || String(salleVal) === '__NOSALLE__') {
+                    opts.allowNoRoom = true;
+                    // also keep explicit flag on formData for downstream consumers
+                    formData.allowNoRoom = true;
+                }
+            } catch (e) { /* noop */ }
+
             let maybePromise;
             try {
                 if (FormManager && FormManager.currentMode === 'edit') {
-                    maybePromise = SessionController.updateSession(FormManager.editingSessionId, formData);
+                    maybePromise = SessionController.updateSession(FormManager.editingSessionId, formData, opts);
                 } else {
-                    maybePromise = SessionController.createSession(formData);
+                    maybePromise = SessionController.createSession(formData, opts);
                 }
             } catch (e) {
                 console.error('SessionController call threw synchronously', e);
@@ -452,19 +520,71 @@ class FormHandlers {
         }
     }
 
-    handleAddSubject(data) {
+    async handleAddSubject(data) {
         if (!data || !data.nom) return;
 
         try {
-            const result = SubjectController.addSubject(data.nom, data);
-            if (result) {
-                NotificationManager.success(`Matière "${data.nom}" ajoutée`);
-                if (FormManager.resetSubjectForm) FormManager.resetSubjectForm();
-                if (window.EDTApp && window.EDTApp.populateFormSelects) window.EDTApp.populateFormSelects();
+            // Preferer l'API StateManager pour cohérence et persistance
+            let ok = false;
+            if (typeof StateManager.addMatiere === 'function') {
+                ok = StateManager.addMatiere(data.nom, data);
+            } else if (typeof StateManager.addSubject === 'function') {
+                ok = StateManager.addSubject(data.nom, data);
+            } else if (typeof SubjectController !== 'undefined' && typeof SubjectController.addSubject === 'function') {
+                // fallback si contrôleur existant (ancienne API)
+                ok = SubjectController.addSubject(data.nom, data);
+            } else {
+                console.warn('Aucune API d\'ajout de matière trouvée.');
             }
+
+            if (!ok) {
+                NotificationManager.error(`Impossible d'ajouter la matière "${data.nom}". (doublon ou données invalides)`);
+                return;
+            }
+
+            // Persister explicitement et attendre la fin
+            if (typeof StateManager.saveState === 'function') {
+                try {
+                    await StateManager.saveState();
+                } catch (e) {
+                    console.warn('saveState failed after addMatiere:', e);
+                }
+            }
+
+            NotificationManager.success(`Matière "${data.nom}" ajoutée`);
+            if (FormManager.resetSubjectForm) FormManager.resetSubjectForm();
+            if (window.EDTApp && window.EDTApp.populateFormSelects) window.EDTApp.populateFormSelects();
         } catch (e) {
             console.error('handleAddSubject error', e);
             NotificationManager.error('Erreur lors de l\'ajout de la matière.');
+        }
+     }
+
+    /**
+     * Supprime une matière par nom (handler appelé depuis UI)
+     * @param {string} nom - Nom exact de la matière à supprimer
+     */
+    async handleRemoveSubject(nom) {
+        if (!nom) return;
+        try {
+            const removed = typeof StateManager.removeSubject === 'function'
+                ? StateManager.removeSubject(nom)
+                : (delete StateManager.state.matiereGroupes[nom]);
+            if (!removed) {
+                DialogManager.error(`La matière "${nom}" est introuvable ou ne peut pas être supprimée.`);
+                return;
+            }
+
+            // Persister
+            if (typeof StateManager.saveState === 'function') {
+                try { await StateManager.saveState(); } catch (e) { console.warn('saveState failed after removeSubject', e); }
+            }
+
+            NotificationManager.success(`Matière "${nom}" supprimée`);
+            if (window.EDTApp && window.EDTApp.populateFormSelects) window.EDTApp.populateFormSelects();
+        } catch (e) {
+            console.error('handleRemoveSubject error', e);
+            NotificationManager.error('Erreur lors de la suppression de la matière.');
         }
     }
 
@@ -509,7 +629,7 @@ class FormHandlers {
                 const formData = (FormManager && typeof FormManager.getSeanceFormData === 'function') ? FormManager.getSeanceFormData() : {};
                 formData.jour = jour;
                 formData.creneau = creneau;
-                 try { if (typeof StateManager.pushUndoState === 'function') StateManager.pushUndoState('direct assign ' + jour + ' ' + creneau); } catch (e) { console.debug('pushUndoState direct assign failed', e); }
+                try { if (typeof StateManager.pushUndoState === 'function') StateManager.pushUndoState('direct assign ' + jour + ' ' + creneau); } catch (e) { console.debug('pushUndoState direct assign failed', e); }
                 // propagate manual "allow conflict" checkbox if present (ensures createSession will receive it)
                 try {
                     const allowConflictCheckbox = document.getElementById('allowTimeSlotConflict');

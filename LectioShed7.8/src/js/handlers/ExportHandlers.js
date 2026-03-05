@@ -14,6 +14,8 @@ import NotificationManager from '../ui/NotificationManager.js';
 import TableRenderer from '../ui/TableRenderer.js';
 import StateManager from '../controllers/StateManager.js';
 import ImportService from '../services/ImportService.js';
+import { getEtablissement, sanitizeFileName } from '../utils/pdfUtils.js';
+import { exportExamTimetableFromDOM } from '../exportExamPdf.js';
 // import { escapeHTML } from '../utils/sanitizers.js';
 
 class ExportHandlers {
@@ -26,101 +28,19 @@ class ExportHandlers {
       // Si les éléments ne sont pas présents, on sort silencieusement (progressive enhancement)
       if (!input && !btn && !downloadBtn) return;
 
-      // Si bouton d'import présent, ouvrir file picker
-      if (btn && input) {
-        btn.addEventListener('click', () => input.click());
-
-        input.addEventListener('change', async () => {
-          const file = input.files && input.files[0];
-          if (!file) return;
-
-          DialogManager.confirm(
-            'Importer des Filières',
-            `Importer le fichier "<strong>${file.name}</strong>" ? Cela ajoutera/mettre à jour les filières existantes.`,
-            async () => {
-              SpinnerManager.show();
-              try {
-                const res = await ImportService.importFilieresFromExcel(file);
-                SpinnerManager.hide();
-                const added = res.added || 0;
-                const updated = res.updated || 0;
-                NotificationManager.success(`${added} filière(s) ajoutée(s), ${updated} mise(s) à jour`);
-              } catch (err) {
-                SpinnerManager.hide();
-                LogService.error('Erreur import filières: ' + (err && err.message ? err.message : String(err)));
-                DialogManager.error('Erreur lors de l\'import des filières. Voir la console pour détails.');
-              } finally {
-                try { input.value = ''; } catch (e) { /* noop */ }
-              }
-            },
-            () => { /* cancel */ }
-          );
-        });
-      }
-
-      // Téléchargement d'un template filières (création client-side)
-      if (downloadBtn) {
-        downloadBtn.addEventListener('click', () => {
-          try {
-            // Header with Exclusions column
-            const data = [
-              ['Filière', 'Session', 'Département', 'Exclusions']
-            ];
-
-            // Build exclusions map from StateManager.state.filiereExclusions if present
-            const exMap = {};
-            try {
-              const rawEx = Array.isArray(StateManager.state?.filiereExclusions) ? StateManager.state.filiereExclusions : [];
-              rawEx.forEach(p => {
-                if (!Array.isArray(p) || p.length < 2) return;
-                const a = String(p[0] || '').trim();
-                const b = String(p[1] || '').trim();
-                if (!a || !b) return;
-                exMap[a] = exMap[a] || new Set();
-                exMap[a].add(b);
-                // keep symmetric for user convenience
-                exMap[b] = exMap[b] || new Set();
-                exMap[b].add(a);
-              });
-            } catch (e) {
-              // ignore mapping errors
-            }
-
-            // Fill rows from existing filieres if present
-            const filieres = Array.isArray(StateManager.state?.filieres) ? StateManager.state.filieres : [];
-            if (filieres.length > 0) {
-              filieres.forEach(f => {
-                const nom = f?.nom || '';
-                const session = f?.session || '';
-                const departement = f?.departement || '';
-                const excludesSet = exMap[nom] || new Set();
-                const excludes = Array.from(excludesSet).join(', ');
-                data.push([nom, session, departement, excludes]);
-              });
-            } else {
-              // example row if none exist
-              data.push(['S5P', 'Automne', 'Département de Physique', 'GTR, GLR']);
-            }
-
-            const worksheet = XLSX.utils.aoa_to_sheet(data);
-            const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, 'Filieres');
-            XLSX.writeFile(workbook, 'template_filieres.xlsx');
-            NotificationManager.success('Template filières téléchargé');
-          } catch (err) {
-            LogService.error('Erreur téléchargement template filières: ' + (err && err.message ? err.message : String(err)));
-            DialogManager.error('Impossible de générer le template filières');
-          }
-        });
-      }
-
       // Attacher le bouton d'export de l'emploi du temps examens s'il existe
-      try {
+   try {
         const btnExamExport = document.getElementById('btnExportExamTimetablePDF');
-        if (btnExamExport && !btnExamExport._attachedExamExport) {
-          btnExamExport.addEventListener('click', () => {
+        // Avoid double-binding: check both flags (compat)
+        if (btnExamExport && !btnExamExport._attachedExamExport && !btnExamExport._examExportAttached) {
+          btnExamExport.addEventListener('click', async () => {
             SpinnerManager.show();
-            this.exportExamTimetablePDF().finally(() => SpinnerManager.hide());
+            try {
+              // Use the structured export (source = StateManager.state.examens) which is the well-formatted export
+              await ExportService.exportExamTimetableStructuredPDF();
+            } finally {
+              SpinnerManager.hide();
+            }
           });
           btnExamExport._attachedExamExport = true;
         }
@@ -395,11 +315,30 @@ class ExportHandlers {
       const scale = usablePdfWidth / imgWidthPx;
       const imgDisplayHeightPt = imgHeightPx * scale;
 
-      if (imgDisplayHeightPt <= (pdfPageHeight - margin * 2)) {
-        doc.addImage(imgDataUrl, 'PNG', margin, margin, usablePdfWidth, imgDisplayHeightPt);
+      // Draw header: title + établissement | année | session (no generation date)
+      doc.setFontSize(16);
+      try { doc.setFont(undefined, 'bold'); } catch (e) { /* noop */ }
+      doc.text('Emploi du Temps des Examens', pdfPageWidth / 2, margin, { align: 'center' });
+
+      const etab = getEtablissement();
+      const headerState = StateManager.state && StateManager.state.header ? StateManager.state.header : {};
+      const infoParts = [];
+      if (etab) infoParts.push(String(etab));
+      if (headerState.annee) infoParts.push(String(headerState.annee));
+      if (headerState.session) infoParts.push(String(headerState.session));
+      if (infoParts.length) {
+        doc.setFontSize(11);
+        try { doc.setFont(undefined, 'normal'); } catch (e) { /* noop */ }
+        doc.text(infoParts.join(' | '), pdfPageWidth / 2, margin + 10, { align: 'center' });
+      }
+      const contentTop = margin + 22;
+
+      if (imgDisplayHeightPt <= (pdfPageHeight - margin * 2 - contentTop + margin)) {
+        doc.addImage(imgDataUrl, 'PNG', margin, contentTop, usablePdfWidth, imgDisplayHeightPt);
       } else {
         const pxPerPage = Math.floor((pdfPageHeight - margin * 2) / scale);
         let renderedHeight = 0;
+        let pageIndex = 0;
         while (renderedHeight < imgHeightPx) {
           const h = Math.min(pxPerPage, imgHeightPx - renderedHeight);
           const tmpCanvas = document.createElement('canvas');
@@ -409,9 +348,21 @@ class ExportHandlers {
           ctx.drawImage(canvas, 0, renderedHeight, imgWidthPx, h, 0, 0, imgWidthPx, h);
           const tmpDataUrl = tmpCanvas.toDataURL('image/png');
           const tmpDisplayHeightPt = h * scale;
-          if (renderedHeight > 0) doc.addPage();
-          doc.addImage(tmpDataUrl, 'PNG', margin, margin, usablePdfWidth, tmpDisplayHeightPt);
+          if (pageIndex > 0) {
+            doc.addPage();
+            // redraw header on new page
+            doc.setFontSize(16);
+            try { doc.setFont(undefined, 'bold'); } catch (e) { /* noop */ }
+            doc.text('Emploi du Temps des Examens', pdfPageWidth / 2, margin, { align: 'center' });
+            if (infoParts.length) {
+              doc.setFontSize(11);
+              try { doc.setFont(undefined, 'normal'); } catch (e) { /* noop */ }
+              doc.text(infoParts.join(' | '), pdfPageWidth / 2, margin + 10, { align: 'center' });
+            }
+          }
+          doc.addImage(tmpDataUrl, 'PNG', margin, contentTop, usablePdfWidth, tmpDisplayHeightPt);
           renderedHeight += h;
+          pageIndex++;
         }
       }
 
