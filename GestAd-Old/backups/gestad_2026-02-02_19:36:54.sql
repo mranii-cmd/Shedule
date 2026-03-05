@@ -1,0 +1,242 @@
+/*M!999999\- enable the sandbox mode */ 
+-- MariaDB dump 10.19  Distrib 10.6.24-MariaDB, for debian-linux-gnu (aarch64)
+--
+-- Host: db    Database: gestad
+-- ------------------------------------------------------
+-- Server version	10.6.24-MariaDB-ubu2204
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `documents`
+--
+
+DROP TABLE IF EXISTS `documents`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `documents` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `title` varchar(255) NOT NULL,
+  `description` text DEFAULT NULL,
+  `category` varchar(50) NOT NULL,
+  `original_name` varchar(255) NOT NULL,
+  `path` varchar(500) NOT NULL,
+  `url` varchar(500) DEFAULT NULL,
+  `file_size` int(11) DEFAULT NULL,
+  `mime_type` varchar(100) DEFAULT NULL,
+  `uploaded_by` int(10) unsigned DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_category` (`category`)
+) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `documents`
+--
+
+LOCK TABLES `documents` WRITE;
+/*!40000 ALTER TABLE `documents` DISABLE KEYS */;
+INSERT INTO `documents` VALUES (1,'test',NULL,'procès-verbaux','bordereau d\'envoi 138-26__25-02-2025.pdf','divers/bordereau_d_envoi_138_26__25_02_2025-1770037601132-53691249.pdf',NULL,1738657,'application/pdf',NULL,'2026-02-02 13:06:41','2026-02-02 13:06:41'),(2,'TEST','CNRST','bordereaux','bordereau d\'envoi 138-26__25-02-2025.pdf','divers/bordereau_d_envoi_138_26__25_02_2025-1770037627925-538241456.pdf',NULL,1738657,'application/pdf',NULL,'2026-02-02 13:07:07','2026-02-02 13:07:07'),(3,'Test Document','Test','divers','test-upload.txt','divers/test_upload-1770037722366-158763008.txt',NULL,22,'text/plain',NULL,'2026-02-02 13:08:42','2026-02-02 13:08:42'),(4,'Bordereau 138-26','CNRST','bordereaux','bordereau d\'envoi 138-26__25-02-2025.pdf','divers/bordereau_d_envoi_138_26__25_02_2025-1770039655048-990258897.pdf',NULL,1738657,'application/pdf',NULL,'2026-02-02 13:40:55','2026-02-02 13:40:55'),(5,'test',NULL,'procès-verbaux','bordereau d\'envoi 138-26__25-02-2025.pdf','divers/bordereau_d_envoi_138_26__25_02_2025-1770039810536-931389429.pdf',NULL,1738657,'application/pdf',NULL,'2026-02-02 13:43:30','2026-02-02 13:43:30'),(6,'Exp',NULL,'procès-verbaux','expression de besoin PEDOC.pdf','divers/expression_de_besoin_PEDOC-1770056612422-904220392.pdf',NULL,563322,'application/pdf',NULL,'2026-02-02 18:23:32','2026-02-02 18:23:32'),(7,'Test',NULL,'procès-verbaux','expression de besoin PEDOC.pdf','divers/expression_de_besoin_PEDOC-1770056652868-161094061.pdf',NULL,563322,'application/pdf',NULL,'2026-02-02 18:24:12','2026-02-02 18:24:12'),(8,'Test',NULL,'procès-verbaux','expression de besoin PEDOC.pdf','divers/expression_de_besoin_PEDOC-1770056854213-258276048.pdf',NULL,563322,'application/pdf',NULL,'2026-02-02 18:27:34','2026-02-02 18:27:34'),(9,'test',NULL,'procès-verbaux','expression de besoin PEDOC.pdf','divers/expression_de_besoin_PEDOC-1770057139773-112573721.pdf',NULL,563322,'application/pdf',NULL,'2026-02-02 18:32:19','2026-02-02 18:32:19'),(10,'test',NULL,'procès-verbaux','expression de besoin PEDOC.pdf','divers/expression_de_besoin_PEDOC-1770057760354-301118115.pdf',NULL,563322,'application/pdf',NULL,'2026-02-02 18:42:40','2026-02-02 18:42:40'),(11,'Test',NULL,'procès-verbaux','expression de besoin PEDOC.pdf','divers/expression_de_besoin_PEDOC-1770058154706-30683020.pdf',NULL,563322,'application/pdf',NULL,'2026-02-02 18:49:14','2026-02-02 18:49:14'),(12,'expression de besoin PEDOC','Fournitures','demandes','expression de besoin PEDOC.pdf','divers/expression_de_besoin_PEDOC-1770058381869-943904222.pdf',NULL,563322,'application/pdf',NULL,'2026-02-02 18:53:01','2026-02-02 18:53:01'),(13,'دفتر ضوابط الدكتوراة','CNPN 2023','législation','Ø¯ÙØªØ± Ø¶ÙØ§Ø¨Ø· Ø§ÙØ¯ÙØªÙØ±Ø§Ø©.pdf','divers/__U________U__________U___U___U_______-1770058443070-371538973.pdf',NULL,271034,'application/pdf',NULL,'2026-02-02 18:54:03','2026-02-02 18:54:03');
+/*!40000 ALTER TABLE `documents` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `events`
+--
+
+DROP TABLE IF EXISTS `events`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `events` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `title` varchar(255) NOT NULL,
+  `description` text DEFAULT NULL,
+  `start_date` date NOT NULL,
+  `start_time` time DEFAULT NULL,
+  `end_date` date DEFAULT NULL,
+  `end_time` time DEFAULT NULL,
+  `location` varchar(255) DEFAULT NULL,
+  `status` varchar(50) DEFAULT 'planned',
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `all_day` tinyint(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  FULLTEXT KEY `events_fulltext` (`title`,`description`)
+) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `events`
+--
+
+LOCK TABLES `events` WRITE;
+/*!40000 ALTER TABLE `events` DISABLE KEYS */;
+INSERT INTO `events` VALUES (12,'Cours de Mathématiques','Premier cours du semestre','2026-02-01',NULL,NULL,NULL,NULL,'planned',1,'2026-02-02 12:25:55','2026-02-02 12:25:55',0),(13,'Réunion enseignants','Coordination','2026-02-03',NULL,NULL,NULL,NULL,'planned',1,'2026-02-02 12:25:55','2026-02-02 12:25:55',0);
+/*!40000 ALTER TABLE `events` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `knex_migrations`
+--
+
+DROP TABLE IF EXISTS `knex_migrations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `knex_migrations` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) DEFAULT NULL,
+  `batch` int(11) DEFAULT NULL,
+  `migration_time` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `knex_migrations`
+--
+
+LOCK TABLES `knex_migrations` WRITE;
+/*!40000 ALTER TABLE `knex_migrations` DISABLE KEYS */;
+INSERT INTO `knex_migrations` VALUES (1,'001_initial.js',1,'2026-02-01 20:55:47'),(2,'002_role_and_fulltext.js',1,'2026-02-01 20:55:47'),(3,'004_add_event_columns.js',1,'2026-02-01 20:55:47'),(4,'006_add_document_file_columns.js',1,'2026-02-01 20:55:47'),(5,'007_add_types_and_year_to_documents.js',1,'2026-02-01 20:55:47'),(6,'20260125_add_end_time_to_events.js',1,'2026-02-01 20:55:47'),(7,'20260128_add_fulltext_documents.js',2,'2026-02-01 21:10:22'),(8,'20260129_add_type_demande.js',2,'2026-02-01 21:10:22'),(9,'20260130_create_resources_table.js',2,'2026-02-01 21:10:22'),(10,'003_create_documents_table.js',3,'2026-02-01 22:58:50'),(11,'YYYYMMDDHHMMSS_create_documents_table.js',3,'2026-02-01 22:58:50');
+/*!40000 ALTER TABLE `knex_migrations` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `knex_migrations_lock`
+--
+
+DROP TABLE IF EXISTS `knex_migrations_lock`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `knex_migrations_lock` (
+  `index` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `is_locked` int(11) DEFAULT NULL,
+  PRIMARY KEY (`index`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `knex_migrations_lock`
+--
+
+LOCK TABLES `knex_migrations_lock` WRITE;
+/*!40000 ALTER TABLE `knex_migrations_lock` DISABLE KEYS */;
+INSERT INTO `knex_migrations_lock` VALUES (1,0);
+/*!40000 ALTER TABLE `knex_migrations_lock` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `resources`
+--
+
+DROP TABLE IF EXISTS `resources`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `resources` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `slug` varchar(255) DEFAULT NULL,
+  `original_name` varchar(255) NOT NULL,
+  `stored_name` varchar(255) NOT NULL,
+  `url` varchar(255) NOT NULL,
+  `mime` varchar(255) DEFAULT NULL,
+  `size` int(11) DEFAULT NULL,
+  `title` varchar(255) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `user_id` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `resources_slug_unique` (`slug`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `resources`
+--
+
+LOCK TABLES `resources` WRITE;
+/*!40000 ALTER TABLE `resources` DISABLE KEYS */;
+/*!40000 ALTER TABLE `resources` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `types`
+--
+
+DROP TABLE IF EXISTS `types`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `types` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `name` varchar(150) NOT NULL,
+  `slug` varchar(150) NOT NULL,
+  `description` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `types_name_unique` (`name`),
+  UNIQUE KEY `types_slug_unique` (`slug`)
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `types`
+--
+
+LOCK TABLES `types` WRITE;
+/*!40000 ALTER TABLE `types` DISABLE KEYS */;
+INSERT INTO `types` VALUES (1,'Demande','demande',NULL,'2026-02-01 21:10:22','2026-02-01 21:10:22'),(2,'Contrat','contrat','Contrats et accords','2026-02-01 21:10:22','2026-02-01 21:10:22'),(3,'Facture','facture','Factures et reçus','2026-02-01 21:10:22','2026-02-01 21:10:22'),(4,'Rapport','rapport','Rapports internes','2026-02-01 21:10:22','2026-02-01 21:10:22'),(5,'Courrier','courrier','Courriers, notes et messages','2026-02-01 21:10:22','2026-02-01 21:10:22'),(6,'Autre','autre','Autres documents','2026-02-01 21:10:22','2026-02-01 21:10:22');
+/*!40000 ALTER TABLE `types` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `users`
+--
+
+DROP TABLE IF EXISTS `users`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `users` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `username` varchar(255) NOT NULL,
+  `password` varchar(255) NOT NULL,
+  `email` varchar(255) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `role` varchar(255) NOT NULL DEFAULT 'user',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `users_username_unique` (`username`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `users`
+--
+
+LOCK TABLES `users` WRITE;
+/*!40000 ALTER TABLE `users` DISABLE KEYS */;
+INSERT INTO `users` VALUES (3,'admin','$2a$10$OpOsmw.B7JTiee.79HTFX.KcOgzu1kV98d5Ej4GlNGwdCiB4nz/dm','admin@example.com','2026-02-02 12:25:55','2026-02-02 12:25:55','admin');
+/*!40000 ALTER TABLE `users` ENABLE KEYS */;
+UNLOCK TABLES;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2026-02-02 19:36:54
